@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Material Lab — New Material{% endblock %}
+{% block content %}
+<section class="page-hero compact"><div><span class="eyebrow">MATERIAL STUDIO</span><h1>Add an expandable material record.</h1><p>Start with the basic identity and X2D process settings. The JSON boxes make the record flexible enough for more engineering values later.</p></div></section>
+<form class="material-form panel" action="/materials/new" method="post">
+  <div class="panel-title"><span class="eyebrow">1. IDENTITY</span><h2>Basic material record</h2></div>
+  <div class="form-grid">
+    <label>Short material name<input required name="name" placeholder="Example: PPS-CF"></label>
+    <label>URL slug<input required name="slug" placeholder="Example: pps-cf"></label>
+    <label>Full chemical name<input required name="full_name" placeholder="Example: Carbon-fibre-reinforced polyphenylene sulfide"></label>
+    <label>Material family<input required name="family" placeholder="Example: High-performance polymer"></label>
+    <label>Subfamily / reinforcement<input name="subfamily" value="Base polymer" placeholder="Carbon fibre / Glass fibre / Base polymer"></label>
+    <label>Family colour<input required type="color" name="family_color" value="#64748b"></label>
+    <label>Chemical formula<input name="formula" placeholder="Example: (C6H4S)n"></label>
+    <label>Repeat unit / simplified skeleton<input name="repeat_unit" placeholder="Example: [—C6H4—S—]n"></label>
+    <label class="span-all">Description<textarea name="description" placeholder="What is it and what makes it distinct?"></textarea></label>
+    <label>Choose it for<textarea name="best_for" placeholder="Best use cases"></textarea></label>
+    <label>Do not choose it for<textarea name="avoid_for" placeholder="Trade-offs / constraints"></textarea></label>
+  </div>
+  <div class="panel-title spaced"><span class="eyebrow">2. SETTINGS</span><h2>Process profile as JSON</h2><p>Keep the existing keys. You can add new fields later.</p></div>
+  <label class="code-input">Settings JSON<textarea required name="settings_json" spellcheck="false">{{ example_settings }}</textarea></label>
+  <div class="panel-title spaced"><span class="eyebrow">3. PROPERTIES</span><h2>Scores, density and engineering values</h2><p>Scores are 0–10 comparison values. Keep both dry and wet states for moisture-sensitive materials.</p></div>
+  <label class="code-input">Properties JSON<textarea required name="properties_json" spellcheck="false">{{ example_properties }}</textarea></label>
+  <label>Source / TDS notes<textarea name="source_notes" placeholder="Source URL, manufacturer grade, test conditions, caveats…"></textarea></label>
+  <div class="form-actions"><a class="button secondary" href="/materials">Cancel</a><button class="button primary" type="submit">Create material record →</button></div>
+</form>
+{% endblock %}

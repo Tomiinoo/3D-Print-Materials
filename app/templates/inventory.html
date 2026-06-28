@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Material Lab — Inventory & Tests{% endblock %}
+{% block content %}
+<section class="page-hero compact">
+  <div><span class="eyebrow">INVENTORY & TEST HISTORY</span><h1>Your exact spools, supplier prices and proven setups.</h1><p>This is the personal layer of Material Lab. Material records are general; these entries are what you truly own and printed with.</p></div>
+  <a class="button primary" href="/materials">Add a spool from a material →</a>
+</section>
+
+<section class="section-heading"><div><span class="eyebrow">TRACKED PRODUCTS</span><h2>Supplier / price inventory</h2></div></section>
+<div class="panel table-panel"><div class="table-scroll"><table><thead><tr><th>Material</th><th>Exact product</th><th>Supplier</th><th>Spool</th><th>Current €/kg</th><th>Last price</th><th>Status</th></tr></thead><tbody>
+{% for product in products %}<tr><td><a href="/materials/{{ product.material_slug }}">{{ product.material_name }}</a></td><td><strong>{{ product.brand }}</strong><br><small>{{ product.product_name }}{% if product.color_name %} · {{ product.color_name }}{% endif %}</small></td><td>{{ product.supplier or '—' }}</td><td>{{ product.spool_weight_g|int }} g</td><td>{% if product.price_per_kg %}€{{ '%.2f'|format(product.price_per_kg) }}{% else %}—{% endif %}</td><td>{% if product.latest_price_eur %}€{{ '%.2f'|format(product.latest_price_eur) }}{% else %}—{% endif %}</td><td>{% if product.favorite %}<span class="favorite">★ Preferred</span>{% else %}<span class="status-chip muted">Tracked</span>{% endif %}</td></tr>{% else %}<tr><td colspan="7" class="muted-cell">No products yet. Open a material and add the real spool you own or watch.</td></tr>{% endfor %}
+</tbody></table></div></div>
+
+<section class="section-heading"><div><span class="eyebrow">PRINT RESULTS</span><h2>Saved material settings</h2></div></section>
+<section class="profile-list">
+{% for profile in profiles %}
+  <article class="profile-card"><div class="profile-score">{{ profile.result_rating }}/5</div><div><h3><a href="/materials/{{ profile.material_slug }}">{{ profile.material_name }}</a> — {{ profile.profile_name }}</h3><p>{{ profile.product_name or 'Generic material profile' }} · {{ profile.state }} · {{ profile.printed_on }}</p><div class="profile-specs"><span>{{ profile.nozzle_diameter }} mm</span><span>{{ profile.nozzle_temp }} °C nozzle</span><span>{{ profile.bed_temp }} °C bed</span><span>{{ profile.chamber_temp }} °C chamber</span><span>{{ profile.speed_mm_s }} mm/s</span></div>{% if profile.notes %}<p class="profile-note">{{ profile.notes }}</p>{% endif %}</div></article>
+{% else %}<div class="empty-state">No tests logged yet. Use a material page to save a nozzle / bed / chamber result.</div>{% endfor %}
+</section>
+{% endblock %}

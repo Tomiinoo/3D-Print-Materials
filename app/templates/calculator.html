@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Material Lab — Cost Calculator{% endblock %}
+{% block content %}
+<section class="page-hero compact">
+  <div><span class="eyebrow">COST CALCULATOR</span><h1>Calculate from the real spool you actually buy.</h1><p>Choose a tracked manufacturer / supplier entry. The calculator pulls that spool’s latest €/kg price and the material density automatically.</p></div>
+</section>
+
+<section class="calculator-layout">
+  <form id="calculator-form" class="panel calculator-form">
+    <div class="panel-title"><span class="eyebrow">PRINT INPUTS</span><h2>Part, support and waste</h2></div>
+    <label class="span-all">Exact filament product<select required id="calc-product" name="product_id">{% for product in products %}<option value="{{ product.id }}">{{ product.material_name }} — {{ product.brand }} {{ product.product_name }}{% if product.price_per_kg %} · €{{ '%.2f'|format(product.price_per_kg) }}/kg{% else %} · no price yet{% endif %}</option>{% endfor %}</select></label>
+    <div class="calculator-product-info" id="calculator-product-info">Choose a spool to see density and tracked €/kg.</div>
+    <label>Model volume (mm³)<input required type="number" id="calc-model-volume" name="model_volume_mm3" min="0" step="1" value="100000"></label>
+    <label>Support volume (mm³)<input type="number" id="calc-support-volume" name="support_volume_mm3" min="0" step="1" value="0"></label>
+    <label>Purge / prime material (g)<input type="number" id="calc-purge" name="purge_g" min="0" step="0.1" value="0"></label>
+    <label>Waste allowance (%)<input type="number" id="calc-waste" name="waste_percent" min="0" step="1" value="3"></label>
+    <label>Printer energy (kWh)<input type="number" id="calc-energy" name="energy_kwh" min="0" step="0.01" value="0"></label>
+    <label>Electricity (€/kWh)<input type="number" id="calc-electricity" name="electricity_eur_kwh" min="0" step="0.01" value="0.30"></label>
+    <button class="button primary span-all" type="submit">Calculate realistic material cost →</button>
+  </form>
+
+  <section class="calculator-results">
+    <article class="result-hero"><span>Estimated total</span><strong id="result-total">€—</strong><p id="result-product">Choose a product, then calculate.</p></article>
+    <div class="result-grid">
+      <article><span>Model mass</span><b id="result-part">—</b></article>
+      <article><span>Support mass</span><b id="result-support">—</b></article>
+      <article><span>Total filament</span><b id="result-total-mass">—</b></article>
+      <article><span>Spool price</span><b id="result-price-per-kg">—</b></article>
+      <article><span>Filament cost</span><b id="result-material-cost">—</b></article>
+      <article><span>Energy cost</span><b id="result-energy-cost">—</b></article>
+    </div>
+    <article class="calculator-note"><strong>What this includes:</strong> part plastic, supports, purge and your waste percentage. Bambu Studio remains the final check for exact purge paths, supports, brim and infill.</article>
+  </section>
+</section>
+
+<script id="calculator-products-data" type="application/json">{{ products | tojson }}</script>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', path='js/calculator.js') }}"></script>{% endblock %}

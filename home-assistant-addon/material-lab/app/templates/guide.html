@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Material Lab — Material Guide{% endblock %}
+{% block content %}
+<section class="page-hero compact">
+  <div><span class="eyebrow">MATERIAL CHOICE GUIDE</span><h1>Describe the job. Get a transparent shortlist.</h1><p>This ranks the seeded comparison values. It shows why a material ranked well and where the compromise still is—there is no fake “one best filament”.</p></div>
+</section>
+
+<section class="guide-layout">
+  <article class="panel guide-controls">
+    <div class="panel-title"><span class="eyebrow">1. WHAT MUST THE PART DO?</span><h2>Select every requirement that matters.</h2></div>
+    <div class="requirement-grid" id="guide-requirements">
+      <button data-need="general"><span>◉</span><b>General functional</b><small>Easy, useful, not extreme</small></button>
+      <button data-need="outdoor"><span>☀</span><b>Outdoor / UV</b><small>Sun, rain, weather</small></button>
+      <button data-need="flexible"><span>⌁</span><b>Flexible / damping</b><small>Grip, seal, tyre, bumper</small></button>
+      <button data-need="heat"><span>♨</span><b>High heat</b><small>Warm machine / car area</small></button>
+      <button data-need="stiff"><span>◫</span><b>High stiffness</b><small>Bracket / fixture / frame</small></button>
+      <button data-need="impact"><span>⬡</span><b>Impact / fatigue</b><small>Clip, mechanism, abuse</small></button>
+      <button data-need="chemical"><span>◈</span><b>Water / chemicals</b><small>Container / exposed part</small></button>
+      <button data-need="cheap"><span>€</span><b>Lower cost</b><small>Rapid iteration / volume</small></button>
+    </div>
+    <label class="state-select guide-state">Condition
+      <select id="guide-state"><option value="dry">Dry / freshly dried</option><option value="wet">Moisture-conditioned / wet</option></select>
+    </label>
+    <button class="button primary" id="guide-run">Rank materials →</button>
+  </article>
+
+  <article class="panel guide-explainer">
+    <span class="eyebrow">HOW THE GUIDE THINKS</span><h2>Weighted trade-offs, not marketing.</h2>
+    <ul class="behaviour-list">
+      <li><b>Outdoor</b> weighs UV, water and heat.</li>
+      <li><b>Stiff</b> weighs XY rigidity and strength, but shows the impact trade-off.</li>
+      <li><b>Impact</b> weighs impact and layer adhesion—fibre-filled composites naturally tend to lose points here.</li>
+      <li><b>High heat</b> weighs heat score plus HDT.</li>
+      <li><b>Low cost</b> favours lower price-range scores and printability.</li>
+    </ul>
+    <div class="engineering-callout warning-callout">The answer is a shortlist. Confirm the selected exact spool’s TDS, actual dryness and printed load direction before designing around it.</div>
+  </article>
+</section>
+
+<section class="section-heading"><div><span class="eyebrow">2. RANKED SHORTLIST</span><h2 id="guide-heading">Choose one or more requirements.</h2></div></section>
+<section id="guide-results" class="guide-results"><div class="empty-state">Select requirements above, then rank materials.</div></section>
+<script id="guide-material-data" type="application/json">{{ materials | tojson }}</script>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', path='js/guide.js') }}"></script>{% endblock %}

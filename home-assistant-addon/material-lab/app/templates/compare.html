@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Material Lab — Compare{% endblock %}
+{% block content %}
+<section class="page-hero compact">
+  <div><span class="eyebrow">COMPARISON LAB</span><h1>Compare the polymer state, not just the product label.</h1><p>Switch between dry and moisture-conditioned behaviour. Use this to narrow a material shortlist; use the exact filament TDS for final design choices.</p></div>
+</section>
+
+<section class="compare-controls panel">
+  <div class="control-title"><span class="eyebrow">1. SELECT MATERIALS</span><h2>Choose up to six for a readable graph.</h2></div>
+  <label class="state-select">State
+    <select id="compare-state"><option value="dry">Dry / freshly dried</option><option value="wet">Moisture-conditioned / wet</option></select>
+  </label>
+  <label class="state-select">Bar property
+    <select id="compare-property">
+      {% for key, label in score_labels.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+    </select>
+  </label>
+  <div class="compare-picker" id="compare-picker">
+    {% for material in materials %}
+    <label class="compare-option" style="--material-color: {{ material.family_color }}">
+      <input type="checkbox" value="{{ material.slug }}" {% if loop.index <= 4 %}checked{% endif %}>
+      <span class="compare-swatch"></span><b>{{ material.name }}</b><small>{{ material.subfamily }}</small>
+    </label>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="comparison-grid">
+  <article class="panel chart-panel"><div class="panel-title"><span class="eyebrow">MULTI-AXIS</span><h2>Engineering profile</h2></div><div id="radar-chart" class="chart-slot"></div></article>
+  <article class="panel chart-panel"><div class="panel-title"><span class="eyebrow">SELECTED PROPERTY</span><h2 id="bar-chart-title">Score comparison</h2></div><div id="bar-chart" class="chart-slot"></div></article>
+</section>
+
+<section class="panel chart-panel full-chart"><div class="panel-title"><span class="eyebrow">TRADE-OFF MAP</span><h2>Heat resistance vs impact resistance</h2><p>Top-left is the difficult combination: high heat and high impact. Most CF/GF materials trade impact performance for stiffness.</p></div><div id="scatter-chart" class="chart-slot scatter-slot"></div></section>
+
+<section class="panel compare-table-wrap"><div class="panel-title"><span class="eyebrow">NUMERIC REFERENCE</span><h2>Selected materials</h2></div><div class="table-scroll"><table id="compare-table"><thead><tr><th>Material</th><th>State</th><th>Density</th><th>HDT</th><th>Continuous</th><th>Moisture</th><th>XY strength</th><th>Layer bond</th><th>Impact</th><th>Price range</th></tr></thead><tbody></tbody></table></div></section>
+
+<script id="compare-material-data" type="application/json">{{ materials | tojson }}</script>
+{% endblock %}
+{% block scripts %}<script src="{{ url_for('static', path='js/compare.js') }}"></script>{% endblock %}

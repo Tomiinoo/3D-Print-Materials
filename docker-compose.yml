@@ -1,0 +1,11 @@
+services:
+  material-lab:
+    build: .
+    container_name: material-lab
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      MATERIAL_LAB_DATA_DIR: /data
+    volumes:
+      - ./data:/data

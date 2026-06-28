@@ -1,0 +1,21 @@
+name: Material Lab
+slug: material_lab
+version: "0.1.0"
+description: Local-first engineering filament database, price tracker and calculator
+url: "https://github.com/your-account/material-lab"
+arch:
+  - aarch64
+  - amd64
+startup: services
+boot: auto
+init: false
+ingress: false
+webui: "http://[HOST]:[PORT:8080]"
+ports:
+  8080/tcp: 8080
+ports_description:
+  8080/tcp: Material Lab web UI
+map:
+  - data:rw
+options: {}
+schema: {}

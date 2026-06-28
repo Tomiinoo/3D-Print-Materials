@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1020">
+  <title>{% block title %}Material Lab{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='css/app.css') }}">
+</head>
+<body data-page="{{ page_name }}">
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="/">
+        <span class="brand-mark">ML</span>
+        <span><strong>Material Lab</strong><small>X2D engineering library</small></span>
+      </a>
+      <nav class="nav">
+        {% for label, href, key in nav %}
+          <a href="{{ href }}" class="nav-link {% if key == page_name %}is-active{% endif %}">
+            <span class="nav-dot"></span>{{ label }}
+          </a>
+        {% endfor %}
+      </nav>
+      <div class="sidebar-note">
+        <strong>Local-first</strong>
+        <span>Your prices, profiles and notes live in your own SQLite database.</span>
+      </div>
+    </aside>
+    <main class="main-content">
+      <header class="topbar">
+        <button class="mobile-menu" aria-label="Open menu" data-sidebar-toggle>☰</button>
+        <div class="breadcrumb">MATERIAL LAB <span>/</span> {{ page_name | upper }}</div>
+        <div class="topbar-actions">
+          <a class="icon-button" href="/materials/new" title="Add material">＋</a>
+          <a class="avatar" href="/settings" title="Settings">T</a>
+        </div>
+      </header>
+      <section class="page-wrap">
+        {% block content %}{% endblock %}
+      </section>
+    </main>
+  </div>
+  <script src="{{ url_for('static', path='js/app.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

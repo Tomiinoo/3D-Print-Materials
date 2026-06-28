@@ -1,4 +1,4 @@
-# Material Lab — X2D Engineering Filament Database
+# Material Lab — X2D Engineering Filament Database (i have no clue what im doing and CHATGPT said to make it public, DO NOT USE IT PLS)
 
 A self-hosted material library, spool-price tracker, engineering comparison tool and print-cost calculator.
 It is deliberately designed as a local-first app: all materials, test profiles, supplier prices and notes live in SQLite on your Pi.

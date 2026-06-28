@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}{{ material.name }} — Material Lab V2{% endblock %}
+
+{% block content %}
+<section class="material-hero" style="--material-color: {{ material.family_color }}">
+  <div class="material-hero-copy">
+    <a class="back-link" href="/v2/materials">← Back to V2 materials</a>
+
+    <div class="hero-tags">
+      <span class="family-pill">{{ material.family }}</span>
+      <span class="subfamily-pill {% if 'Carbon' in material.classification %}cf{% elif 'Glass' in material.classification %}gf{% endif %}">
+        {{ material.classification }}
+      </span>
+      <span class="status-chip {% if material.quality_kind == 'legacy' %}warning{% elif material.quality_kind == 'missing' %}muted{% endif %}">
+        {{ material.quality_label }}
+      </span>
+    </div>
+
+    <h1>{{ material.name }}</h1>
+    <h2>{{ material.full_name }}</h2>
+    <p>{{ material.description or "No description recorded yet." }}</p>
+  </div>
+
+  <div class="molecule-card">
+    <span>POLYMER FORMULA</span>
+    <strong>{{ material.formula or "—" }}</strong>
+    <div class="repeat-unit">{{ material.repeat_unit or "No repeat unit recorded" }}</div>
+    <small>Reference identity for this material variant</small>
+  </div>
+</section>
+
+<section class="stat-band">
+  <article>
+    <span>Density</span>
+    <b>{% if material.primary.get("density") %}{{ material.primary.get("density").value }}{% else %}—{% endif %}</b>
+    <small>{% if material.primary.get("density") %}{{ material.primary.get("density").source_type }} · {{ material.primary.get("density").confidence }}{% else %}No record yet{% endif %}</small>
+  </article>
+
+  <article>
+    <span>HDT</span>
+    <b>{% if material.primary.get("heat_deflection_temperature") %}{{ material.primary.get("heat_deflection_temperature").value }}{% else %}—{% endif %}</b>
+    <small>{% if material.primary.get("heat_deflection_temperature") %}{{ material.primary.get("heat_deflection_temperature").source_type }} · {{ material.primary.get("heat_deflection_temperature").confidence }}{% else %}No record yet{% endif %}</small>
+  </article>
+
+  <article>
+    <span>Continuous service</span>
+    <b>{% if material.primary.get("continuous_service_temperature") %}{{ material.primary.get("continuous_service_temperature").value }}{% else %}—{% endif %}</b>
+    <small>{% if material.primary.get("continuous_service_temperature") %}{{ material.primary.get("continuous_service_temperature").source_type }} · {{ material.primary.get("continuous_service_temperature").confidence }}{% else %}No record yet{% endif %}</small>
+  </article>
+
+  <article>
+    <span>Property records</span>
+    <b>{{ material.record_count }}</b>
+    <small>{{ material.verified_count }} verified / medium+ · {{ material.legacy_count }} legacy imported</small>
+  </article>
+</section>
+
+<section class="detail-grid">
+  <article class="panel decision-panel good">
+    <span class="eyebrow">CHOOSE IT FOR</span>
+    <h3>{{ material.best_for or "Add intended applications." }}</h3>
+  </article>
+
+  <article class="panel decision-panel bad">
+    <span class="eyebrow">DO NOT CHOOSE IT FOR</span>
+    <h3>{{ material.avoid_for or "Add limitations and unsuitable uses." }}</h3>
+  </article>
+</section>
+
+<section class="panel properties-panel">
+  <div class="panel-title">
+    <span class="eyebrow">TRACEABLE ENGINEERING PROPERTIES</span>
+    <h2>Values, state and origin</h2>
+  </div>
+
+  <div class="engineering-callout warning-callout">
+    <strong>Read values in context:</strong>
+    a property without a controlled material state, standard, grade and print orientation is useful as a reference, not as a certified design value.
+  </div>
+
+  <div class="profile-list">
+    {% for property in material.properties %}
+      <article class="profile-card">
+        <div class="profile-score">{{ property.confidence_key | upper }}</div>
+
+        <div>
+          <h3>{{ property.name }} <span class="status-chip">{{ property.value }}</span></h3>
+
+          <p>
+            {{ property.category | replace("_", " ") | title }}
+            · State: {{ property.material_state }}
+            · Source: {{ property.source_type }}
+          </p>
+
+          <div class="profile-specs">
+            <span>{{ property.confidence }}</span>
+            {% if property.is_primary %}<span>Primary display record</span>{% endif %}
+            {% if property.source_title %}<span>{{ property.source_title }}</span>{% endif %}
+          </div>
+
+          {% if property.notes %}
+            <p class="profile-note">{{ property.notes }}</p>
+          {% endif %}
+
+          {% if property.source_url %}
+            <p><a class="text-link" target="_blank" rel="noopener" href="{{ property.source_url }}">Open recorded source ↗</a></p>
+          {% endif %}
+        </div>
+      </article>
+    {% else %}
+      <div class="empty-state">No V2 property records exist for this material yet.</div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="source-footnote">
+  <strong>Material notes:</strong>
+  {{ material.source_notes or "No source notes recorded yet." }}
+  This V2 page is read-only while the source and property-entry workflow is built.
+</section>
+{% endblock %}

@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session, selectinload
 from .database import Base, DB_PATH, DATA_DIR, SessionLocal, engine, get_session
 from .models import FilamentProduct, Material, PriceEntry, PrintProfile
 from .seed import seed_materials
+from .v2_routes import router as v2_router
 
 APP_DIR = Path(__file__).resolve().parent
 
@@ -33,6 +34,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title="Material Lab", version="0.1.0", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=APP_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=APP_DIR / "templates")
+app.include_router(v2_router)
 
 
 SCORE_LABELS = {

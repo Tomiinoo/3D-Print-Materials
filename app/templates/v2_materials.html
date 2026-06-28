@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Material Lab — V2 Library{% endblock %}
+
+{% block content %}
+<section class="page-hero compact">
+  <div>
+    <span class="eyebrow">MATERIAL LIBRARY V2</span>
+    <h1>Engineering material data with visible sources.</h1>
+    <p>Every property carries a value, material state, source type and confidence level. This preview reads from the new V2 tables without changing the current library.</p>
+  </div>
+  <a class="button secondary" href="/materials">Open current library</a>
+</section>
+
+<div class="engineering-callout warning-callout">
+  <strong>V2 preview:</strong>
+  Imported prototype values are retained as legacy reference data. They are not presented as verified manufacturer test data until a proper source, test state and standard are recorded.
+</div>
+
+<section class="filter-panel">
+  <label class="search-box">
+    <span>⌕</span>
+    <input id="material-search" type="search" placeholder="Search PA6-CF, nylon, heat, density, outdoor…">
+  </label>
+
+  <div class="family-filters" id="family-filters">
+    <button class="chip is-selected" data-family="all">All materials</button>
+    {% for family in families %}
+      <button class="chip" data-family="{{ family }}">{{ family }}</button>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="material-grid" id="material-grid">
+{% for material in materials %}
+  {% set density = material.primary.get("density") %}
+  {% set hdt = material.primary.get("heat_deflection_temperature") %}
+  {% set service = material.primary.get("continuous_service_temperature") %}
+
+  <a
+    class="material-card"
+    data-family="{{ material.family }}"
+    data-search="{{ material.name }} {{ material.full_name }} {{ material.family }} {{ material.classification }} {{ material.description }} {{ material.best_for }} {{ material.avoid_for }}"
+    href="/v2/materials/{{ material.slug }}"
+    style="--material-color: {{ material.family_color }}"
+  >
+    <div class="material-card-top">
+      <span class="family-pill">{{ material.family }}</span>
+      <span class="subfamily-pill {% if 'Carbon' in material.classification %}cf{% elif 'Glass' in material.classification %}gf{% endif %}">
+        {{ material.classification }}
+      </span>
+    </div>
+
+    <h3>{{ material.name }}</h3>
+    <p>{{ material.full_name }}</p>
+
+    <div class="status-row">
+      <span class="status-chip">{{ material.record_count }} property records</span>
+      <span class="status-chip {% if material.quality_kind == 'legacy' %}warning{% elif material.quality_kind == 'missing' %}muted{% endif %}">
+        {{ material.quality_label }}
+      </span>
+    </div>
+
+    <div class="micro-stats">
+      <span>
+        <small>Density</small>
+        <b>{% if density %}{{ density.value }}{% else %}—{% endif %}</b>
+      </span>
+      <span>
+        <small>HDT</small>
+        <b>{% if hdt %}{{ hdt.value }}{% else %}—{% endif %}</b>
+      </span>
+      <span>
+        <small>Service</small>
+        <b>{% if service %}{{ service.value }}{% else %}—{% endif %}</b>
+      </span>
+    </div>
+
+    <div class="score-pair">
+      <div>
+        <span>Traceable records</span>
+        <i><em style="width: {{ [material.record_count * 10, 100] | min }}%"></em></i>
+      </div>
+      <div>
+        <span>Verified / medium+ sources</span>
+        <i><em style="width: {% if material.record_count %}{{ (material.verified_count / material.record_count * 100) | round(0) }}{% else %}0{% endif %}%"></em></i>
+      </div>
+      <div>
+        <span>Legacy imported records</span>
+        <i><em style="width: {% if material.record_count %}{{ (material.legacy_count / material.record_count * 100) | round(0) }}{% else %}0{% endif %}%"></em></i>
+      </div>
+    </div>
+
+    <div class="card-footer">
+      <span>{{ material.best_for or "Add intended applications" }}</span>
+      <strong>→</strong>
+    </div>
+  </a>
+{% endfor %}
+</section>
+
+<div class="empty-state" id="material-empty" hidden>
+  No V2 material matches this search. Try a polymer family, property, CF, GF or application.
+</div>
+{% endblock %}

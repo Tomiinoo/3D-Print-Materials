@@ -13,6 +13,8 @@ if str(PROJECT_ROOT) not in sys.path:
 
 # Importing models registers every SQLAlchemy table on Base.metadata.
 from app import models as _models  # noqa: F401
+from app import models_v2 as _models_v2  # noqa: F401
+from app import models_v2 as _models_v2  # noqa: F401
 from app.database import Base, engine
 
 config = context.config

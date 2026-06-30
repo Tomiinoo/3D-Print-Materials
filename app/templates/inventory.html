@@ -3,18 +3,131 @@
 {% block content %}
 <section class="page-hero compact">
   <div><span class="eyebrow">INVENTORY & TEST HISTORY</span><h1>Your exact spools, supplier prices and proven setups.</h1><p>This is the personal layer of Material Lab. Material records are general; these entries are what you truly own and printed with.</p></div>
-  <a class="button primary" href="/materials">Add a spool from a material →</a>
+  <a class="button primary" href="/materials">I bought a spool →</a>
 </section>
 
-<section class="section-heading"><div><span class="eyebrow">TRACKED PRODUCTS</span><h2>Supplier / price inventory</h2></div></section>
-<div class="panel table-panel"><div class="table-scroll"><table><thead><tr><th>Material</th><th>Exact product</th><th>Supplier</th><th>Spool</th><th>Current €/kg</th><th>Last price</th><th>Status</th></tr></thead><tbody>
-{% for product in products %}<tr><td><a href="/materials/{{ product.material_slug }}">{{ product.material_name }}</a></td><td><strong>{{ product.brand }}</strong><br><small>{{ product.product_name }}{% if product.color_name %} · {{ product.color_name }}{% endif %}</small></td><td>{{ product.supplier or '—' }}</td><td>{{ product.spool_weight_g|int }} g</td><td>{% if product.price_per_kg %}€{{ '%.2f'|format(product.price_per_kg) }}{% else %}—{% endif %}</td><td>{% if product.latest_price_eur %}€{{ '%.2f'|format(product.latest_price_eur) }}{% else %}—{% endif %}</td><td>{% if product.favorite %}<span class="favorite">★ Preferred</span>{% else %}<span class="status-chip muted">Tracked</span>{% endif %}</td></tr>{% else %}<tr><td colspan="7" class="muted-cell">No products yet. Open a material and add the real spool you own or watch.</td></tr>{% endfor %}
-</tbody></table></div></div>
+<section class="section-heading">
+  <div>
+    <span class="eyebrow">ACTIVE SPOOLS</span>
+    <h2>Numbered physical inventory</h2>
+  </div>
+</section>
+
+<div class="panel table-panel">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Spool #</th>
+          <th>Material</th>
+          <th>Exact product</th>
+          <th>Supplier</th>
+          <th>Mass</th>
+          <th>Current €/kg</th>
+          <th>Last price</th>
+          <th>Status</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for product in products %}
+          <tr>
+            <td><strong>{{ product.spool_code }}</strong></td>
+            <td><a href="/materials/{{ product.material_slug }}">{{ product.material_name }}</a></td>
+            <td><strong>{{ product.brand }}</strong><br><small>{{ product.product_name }}{% if product.color_name %} · {{ product.color_name }}{% endif %}</small></td>
+            <td>{{ product.supplier or '—' }}</td>
+            <td>{{ product.spool_weight_g|int }} g</td>
+            <td>{% if product.price_per_kg %}€{{ '%.2f'|format(product.price_per_kg) }}{% else %}—{% endif %}</td>
+            <td>{% if product.latest_price_eur %}€{{ '%.2f'|format(product.latest_price_eur) }}{% else %}—{% endif %}</td>
+            <td>{% if product.favorite %}<span class="favorite">★ Preferred</span>{% else %}<span class="status-chip muted">Active</span>{% endif %}</td>
+            <td>
+              <form action="/products/{{ product.id }}/archive" method="post" class="inline-form">
+                <input type="hidden" name="return_to" value="/inventory#archived">
+                <button class="text-link danger-link" type="submit">Archive</button>
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="9" class="muted-cell">No active spools yet. Start with “I bought a spool”, choose the material, then save the exact brand and spool number.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<section class="section-heading">
+  <div>
+    <span class="eyebrow">BUY AGAIN?</span>
+    <h2>Supplier and spool memory</h2>
+  </div>
+</section>
+<section class="buy-again-grid">
+  {% for product in products %}
+    <article class="buy-again-card {% if product.favorite %}is-favorite{% endif %}">
+      <div>
+        <span class="eyebrow">{{ product.spool_code }}</span>
+        <h3><a href="/materials/{{ product.material_slug }}">{{ product.material_name }}</a></h3>
+        <p>{{ product.brand }} · {{ product.product_name }}{% if product.supplier %} · {{ product.supplier }}{% endif %}</p>
+      </div>
+      <div class="buy-again-facts">
+        <span>{% if product.favorite %}Would buy again{% else %}Not marked yet{% endif %}</span>
+        <span>{% if product.price_per_kg %}€{{ '%.2f'|format(product.price_per_kg) }}/kg{% else %}No tracked price{% endif %}</span>
+        <span>{{ product.profile_count }} print result{% if product.profile_count != 1 %}s{% endif %}</span>
+      </div>
+      {% if product.notes %}<p class="product-note">{{ product.notes }}</p>{% endif %}
+    </article>
+  {% else %}
+    <div class="empty-state">Your buy-again list appears after the first numbered spool is saved.</div>
+  {% endfor %}
+</section>
+
+<section class="section-heading anchored" id="archived">
+  <div>
+    <span class="eyebrow">ARCHIVED SPOOLS</span>
+    <h2>Hidden, not deleted</h2>
+  </div>
+</section>
+
+<div class="panel table-panel">
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Spool #</th>
+          <th>Material</th>
+          <th>Exact product</th>
+          <th>Supplier</th>
+          <th>Last price</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for product in archived_products %}
+          <tr>
+            <td><strong>{{ product.spool_code }}</strong></td>
+            <td><a href="/materials/{{ product.material_slug }}">{{ product.material_name }}</a></td>
+            <td><strong>{{ product.brand }}</strong><br><small>{{ product.product_name }}{% if product.color_name %} · {{ product.color_name }}{% endif %}</small></td>
+            <td>{{ product.supplier or '—' }}</td>
+            <td>{% if product.latest_price_eur %}€{{ '%.2f'|format(product.latest_price_eur) }}{% else %}—{% endif %}</td>
+            <td>
+              <form action="/products/{{ product.id }}/restore" method="post" class="inline-form">
+                <input type="hidden" name="return_to" value="/inventory#archived">
+                <button class="text-link" type="submit">Restore</button>
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="6" class="muted-cell">No archived spools. Archiving hides a spool without destroying its history.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
 
 <section class="section-heading"><div><span class="eyebrow">PRINT RESULTS</span><h2>Saved material settings</h2></div></section>
 <section class="profile-list">
 {% for profile in profiles %}
-  <article class="profile-card"><div class="profile-score">{{ profile.result_rating }}/5</div><div><h3><a href="/materials/{{ profile.material_slug }}">{{ profile.material_name }}</a> — {{ profile.profile_name }}</h3><p>{{ profile.product_name or 'Generic material profile' }} · {{ profile.state }} · {{ profile.printed_on }}</p><div class="profile-specs"><span>{{ profile.nozzle_diameter }} mm</span><span>{{ profile.nozzle_temp }} °C nozzle</span><span>{{ profile.bed_temp }} °C bed</span><span>{{ profile.chamber_temp }} °C chamber</span><span>{{ profile.speed_mm_s }} mm/s</span></div>{% if profile.notes %}<p class="profile-note">{{ profile.notes }}</p>{% endif %}</div></article>
-{% else %}<div class="empty-state">No tests logged yet. Use a material page to save a nozzle / bed / chamber result.</div>{% endfor %}
+  <article class="profile-card"><div class="profile-score">{{ profile.result_rating }}/5</div><div><h3><a href="/materials/{{ profile.material_slug }}">{{ profile.material_name }}</a> — {{ profile.profile_name }}</h3><p>{{ profile.product_name or 'Generic material profile' }} · {{ profile.printer_name or 'No printer saved' }} · {{ profile.state }} · {{ profile.printed_on }}</p><div class="profile-specs"><span>{{ profile.nozzle_diameter }} mm</span><span>{{ profile.nozzle_temp }} °C nozzle</span><span>{{ profile.bed_temp }} °C bed</span><span>{{ profile.chamber_temp }} °C chamber</span><span>{{ profile.speed_mm_s }} mm/s</span>{% if profile.filament_used_g %}<span>{{ '%.1f'|format(profile.filament_used_g) }} g used</span>{% endif %}</div>{% if profile.notes %}<p class="profile-note">{{ profile.notes }}</p>{% endif %}</div></article>
+{% else %}<div class="empty-state">No tests logged yet. Open a material, add an exact spool, then save the first print result with printer, filament used and notes.</div>{% endfor %}
 </section>
 {% endblock %}

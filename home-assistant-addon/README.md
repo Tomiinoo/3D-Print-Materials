@@ -1,5 +1,7 @@
 # Home Assistant local app package
 
+> **Experimental package:** the main supported runtime is the root Docker Compose app. This add-on folder contains a self-contained copied app package and may lag behind the main application unless it is deliberately updated.
+
 This folder now contains a self-contained local Home Assistant app build for **aarch64** Raspberry Pi systems and **amd64** systems.
 
 ## Practical recommendation

@@ -1,0 +1,79 @@
+{% set structure = material.polymer_structure %}
+<section class="panel polymer-chemistry-card" id="polymer-chemistry">
+  <div class="panel-title">
+    <span class="eyebrow">POLYMER CHEMISTRY</span>
+    <h2>Polymer chemistry</h2>
+  </div>
+
+  <div class="polymer-chemistry-layout">
+    <div class="polymer-diagram-panel">
+      {% if structure.svg_markup %}
+        {{ structure.svg_markup | safe }}
+      {% else %}
+        <div class="polymer-structure-fallback" role="img" aria-label="Chemical structure not yet curated">
+          <strong>Chemical structure not yet curated</strong>
+          <span>This record has no local canonical-structure mapping yet.</span>
+        </div>
+      {% endif %}
+
+      <p class="polymer-read-note">
+        The diagram shows the base polymer chemistry. Additives and reinforcements are shown separately.
+      </p>
+    </div>
+
+    <div class="polymer-chemistry-meta">
+      <div class="polymer-meta-row">
+        <span>Structure name</span>
+        <strong>{{ structure.structure_title }}</strong>
+      </div>
+
+      {% if structure.iupac_style_name %}
+        <div class="polymer-meta-row">
+          <span>IUPAC-style name</span>
+          <strong>{{ structure.iupac_style_name }}</strong>
+        </div>
+      {% endif %}
+
+      <div class="polymer-meta-row">
+        <span>Type</span>
+        <strong>{{ structure.type_label }}</strong>
+      </div>
+
+      {% if structure.formula %}
+        <div class="polymer-meta-row polymer-meta-row--formula">
+          <span>Repeat notation / composition notation</span>
+          <code>{{ structure.formula }}</code>
+        </div>
+      {% endif %}
+
+      <div class="polymer-meta-row">
+        <span>What this image represents</span>
+        <p>{{ structure.diagram_note }}</p>
+      </div>
+
+      {% if structure.base_chemistry_label or structure.variant_label or structure.structural_relation %}
+        <div class="polymer-relation-box">
+          {% if structure.base_chemistry_label %}
+            <strong>{{ structure.base_chemistry_label }}</strong>
+          {% endif %}
+
+          {% if structure.variant_label %}
+            <span>{{ structure.variant_label }}</span>
+          {% endif %}
+
+          {% if structure.structural_relation %}
+            <p>{{ structure.structural_relation }}</p>
+          {% endif %}
+        </div>
+      {% endif %}
+
+      {% if structure.additives %}
+        <div class="polymer-additive-group" aria-label="Formulation badges">
+          {% for additive in structure.additives %}
+            <span class="polymer-additive-badge">{{ additive }}</span>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</section>

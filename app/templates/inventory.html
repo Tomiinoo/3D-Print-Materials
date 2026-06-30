@@ -1,65 +1,63 @@
 {% extends "base.html" %}
-{% block title %}Material Lab - Inventory & Tests{% endblock %}
+{% block title %}Material Lab - My Spools & Prints{% endblock %}
 {% block content %}
-<section class="page-hero compact">
+<section class="page-header">
   <div>
-    <span class="eyebrow">INVENTORY & TEST HISTORY</span>
-    <h1>Physical spools, remaining grams and print results.</h1>
-    <p>Start from the exact spool when you want stock, price, edits or print history. Start from the material page when you want general PETG/ASA/PLA knowledge.</p>
+    <span class="eyebrow">WORKSHOP</span>
+    <h1>My Spools & Prints</h1>
+    <p>Track physical spools, remaining filament, cost, and print history.</p>
   </div>
-  <a class="button primary" href="/materials">I bought a spool</a>
+  <div class="page-actions">
+    <a class="button primary" href="/materials">Add spool</a>
+    <a class="button secondary" href="/profiles/new">Add print result</a>
+  </div>
 </section>
 
-<section class="inventory-summary-grid">
-  <article><span>Active spools</span><strong>{{ inventory_stats.active_spools }}</strong><small>{{ inventory_stats.archived_spools }} archived</small></article>
-  <article><span>Remaining filament</span><strong>{{ '%.1f'|format(inventory_stats.remaining_g) }} g</strong><small>{{ '%.1f'|format(inventory_stats.used_g) }} g used in logged prints</small></article>
-  <article><span>Print results</span><strong>{{ inventory_stats.print_results }}</strong><small>Material and spool tests</small></article>
-  <article><span>Next action</span><strong>Inspect spool</strong><small>Open a spool card before editing stock or tests</small></article>
+<section class="summary-strip">
+  <article><span>Active spools</span><strong>{{ inventory_stats.active_spools }}</strong></article>
+  <article><span>Remaining filament</span><strong>{{ '%.0f'|format(inventory_stats.remaining_g) }} g</strong></article>
+  <article><span>Used in prints</span><strong>{{ '%.0f'|format(inventory_stats.used_g) }} g</strong></article>
+  <article><span>Low stock</span><strong>{{ inventory_stats.low_stock }}</strong></article>
+  <article><span>Print results</span><strong>{{ inventory_stats.print_results }}</strong></article>
 </section>
 
 <section class="section-heading">
   <div>
     <span class="eyebrow">ACTIVE SPOOLS</span>
-    <h2>Numbered physical inventory</h2>
+    <h2>Physical inventory</h2>
   </div>
 </section>
 
-<section class="inventory-card-grid">
+<section class="workshop-table inventory-table">
+  <div class="workshop-row workshop-row--head">
+    <span>Status</span><span>Spool</span><span>Material</span><span>Exact product</span><span>Remaining</span><span>Used</span><span>Price</span><span>Last used</span><span>Actions</span>
+  </div>
   {% for product in products %}
-    <article class="inventory-spool-card">
-      <div class="inventory-spool-card__top">
-        <div>
-          <a class="eyebrow spool-code-link" href="{{ product.spool_path }}">{{ product.spool_code }}</a>
-          <h3>{{ product.material_name }} - {{ product.brand }} {{ product.product_name }}</h3>
-          <p>{{ product.supplier or 'No supplier saved' }}{% if product.color_name %} · {{ product.color_name }}{% endif %}</p>
-        </div>
-        {% if product.favorite %}<span class="favorite">Preferred</span>{% else %}<span class="status-chip muted">Active</span>{% endif %}
+    <div class="workshop-row">
+      <span>{% if product.favorite %}<b class="status-text status-text--warn">Preferred</b>{% else %}<b class="status-text status-text--ok">Active</b>{% endif %}</span>
+      <a class="spool-code-link" href="{{ product.spool_path }}"><strong>{{ product.spool_code }}</strong></a>
+      <a href="/materials/{{ product.material_slug }}">{{ product.material_name }}</a>
+      <div>
+        <strong>{{ product.brand }} {{ product.product_name }}</strong>
+        <small>{{ product.color_name or 'No colour saved' }}{% if product.supplier %} / {{ product.supplier }}{% endif %}</small>
       </div>
-      <div class="inventory-spool-card__numbers">
-        <span><b>{{ product.spool_weight_g|int }} g</b><small>spool</small></span>
-        <span><b>{{ '%.1f'|format(product.remaining_g) }} g</b><small>left</small></span>
-        <span><b>{{ '%.1f'|format(product.filament_used_g) }} g</b><small>used</small></span>
-        <span><b>{% if product.price_per_kg %}€{{ '%.2f'|format(product.price_per_kg) }}/kg{% else %}-{% endif %}</b><small>current price</small></span>
+      <div>
+        <strong>{{ '%.1f'|format(product.remaining_g) }} / {{ product.spool_weight_g|int }} g</strong>
+        <div class="spool-usage"><span style="width: {{ product.remaining_percent }}%"></span></div>
       </div>
-      <div class="spool-usage"><span style="width: {{ product.remaining_percent }}%"></span></div>
-      <div class="inventory-spool-card__meta">
-        <span>{{ product.profile_count }} print result{% if product.profile_count != 1 %}s{% endif %}</span>
-        <span>{% if product.latest_price_eur %}Last price €{{ '%.2f'|format(product.latest_price_eur) }}{% else %}No price yet{% endif %}</span>
-      </div>
-      {% if product.notes %}<p class="product-note">{{ product.notes }}</p>{% endif %}
-      <div class="inventory-actions">
-        <a class="button secondary" href="{{ product.spool_path }}">Inspect</a>
-        <a class="button secondary" href="{{ product.spool_path }}/edit">Edit</a>
+      <span>{{ '%.1f'|format(product.filament_used_g) }} g</span>
+      <span>{% if product.price_per_kg %}&euro;{{ '%.2f'|format(product.price_per_kg) }}/kg{% else %}No price{% endif %}</span>
+      <span>{{ product.last_printed_on or 'Not yet used' }}</span>
+      <div class="row-actions">
+        <a class="text-link" href="{{ product.spool_path }}">Inspect</a>
+        <a class="text-link" href="{{ product.spool_path }}/edit">Edit</a>
+        <a class="text-link" href="/materials/{{ product.material_slug }}#profiles">Add print</a>
         <form action="/products/{{ product.id }}/archive" method="post" class="inline-form">
           <input type="hidden" name="return_to" value="/inventory#archived">
-          <button class="button secondary" type="submit">Archive</button>
-        </form>
-        <form action="/products/{{ product.id }}/delete" method="post" class="inline-form" onsubmit="return confirm('Delete this exact spool and its price history forever? Print results will stay saved without this spool link.');">
-          <input type="hidden" name="return_to" value="/inventory">
-          <button class="button secondary danger-button" type="submit">Delete</button>
+          <button class="text-link" type="submit">Archive</button>
         </form>
       </div>
-    </article>
+    </div>
   {% else %}
     <div class="empty-state">No active spools yet. Open a material and save the exact spool you bought.</div>
   {% endfor %}
@@ -68,7 +66,8 @@
 <section class="section-heading anchored" id="archived">
   <div>
     <span class="eyebrow">ARCHIVED SPOOLS</span>
-    <h2>Hidden, not deleted</h2>
+    <h2>Hidden from active inventory</h2>
+    <p>Archived spools keep their price and print history.</p>
   </div>
 </section>
 
@@ -77,12 +76,12 @@
     <table>
       <thead>
         <tr>
-          <th>Spool #</th>
+          <th>Spool</th>
           <th>Material</th>
           <th>Exact product</th>
           <th>Supplier</th>
           <th>Last price</th>
-          <th>Action</th>
+          <th>Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -90,9 +89,9 @@
           <tr>
             <td><a class="text-link spool-code-link" href="{{ product.spool_path }}"><strong>{{ product.spool_code }}</strong></a></td>
             <td><a href="/materials/{{ product.material_slug }}">{{ product.material_name }}</a></td>
-            <td><strong>{{ product.brand }}</strong><br><small>{{ product.product_name }}{% if product.color_name %} · {{ product.color_name }}{% endif %}</small></td>
+            <td><strong>{{ product.brand }}</strong><br><small>{{ product.product_name }}{% if product.color_name %} / {{ product.color_name }}{% endif %}</small></td>
             <td>{{ product.supplier or '-' }}</td>
-            <td>{% if product.latest_price_eur %}€{{ '%.2f'|format(product.latest_price_eur) }}{% else %}-{% endif %}</td>
+            <td>{% if product.latest_price_eur %}&euro;{{ '%.2f'|format(product.latest_price_eur) }}{% else %}-{% endif %}</td>
             <td>
               <div class="table-actions">
                 <a class="text-link" href="{{ product.spool_path }}">Inspect</a>
@@ -109,47 +108,52 @@
             </td>
           </tr>
         {% else %}
-          <tr><td colspan="6" class="muted-cell">No archived spools. Archiving hides a spool without destroying its history.</td></tr>
+          <tr><td colspan="6" class="muted-cell">No archived spools.</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </div>
 
-<section class="section-heading">
+<section class="section-heading anchored" id="profiles">
   <div>
-    <span class="eyebrow">PRINT RESULTS</span>
-    <h2>Saved material settings</h2>
+    <span class="eyebrow">PRINT HISTORY</span>
+    <h2>Chronological log</h2>
   </div>
+  <a class="button secondary" href="/profiles/new">Add print result</a>
 </section>
-<section class="profile-list">
-{% for profile in profiles %}
-  <article class="profile-card">
-    <div class="profile-score">{{ profile.result_rating }}/5</div>
-    <div>
-      <h3><a href="/materials/{{ profile.material_slug }}">{{ profile.material_name }}</a> - {{ profile.profile_name }}</h3>
-      <p>
-        {% if profile.product_spool_path %}
-          <a class="text-link" href="{{ profile.product_spool_path }}">{{ profile.product_spool_code }} · {{ profile.product_name }}</a>
-        {% else %}
-          {{ profile.product_name or 'Generic material profile' }}
+<section class="workshop-table print-log-table">
+  <div class="workshop-row workshop-row--head">
+    <span>Date</span><span>Print/test</span><span>Spool</span><span>Material</span><span>Printer</span><span>Nozzle</span><span>Used</span><span>Rating</span><span>Actions</span>
+  </div>
+  {% for profile in profiles %}
+    <div class="workshop-row">
+      <span>{{ profile.printed_on }}</span>
+      <div>
+        <strong>{{ profile.profile_name }}</strong>
+        {% if profile.notes %}<small>{{ profile.notes[:110] }}{% if profile.notes|length > 110 %}...{% endif %}</small>{% endif %}
+        {% if profile.attachments %}
+          <div class="attachment-inline">
+            {% for attachment in profile.attachments[:2] %}
+              <a href="{{ attachment.download_path }}" title="{{ attachment.original_filename }}">{% if attachment.is_photo %}<img src="{{ attachment.download_path }}" alt="">{% else %}{{ attachment.file_category }}{% endif %}</a>
+            {% endfor %}
+            {% if profile.attachments|length > 2 %}<small>+{{ profile.attachments|length - 2 }} more</small>{% endif %}
+          </div>
         {% endif %}
-        · {{ profile.printer_name or 'No printer saved' }} · {{ profile.state }} · {{ profile.printed_on }}
-      </p>
-      <div class="profile-specs">
-        <span>{{ profile.nozzle_diameter }} mm</span>
-        <span>{{ profile.nozzle_temp }} °C nozzle</span>
-        <span>{{ profile.bed_temp }} °C bed</span>
-        <span>{{ profile.chamber_temp }} °C chamber</span>
-        <span>{{ profile.speed_mm_s }} mm/s</span>
-        {% if profile.filament_used_g %}<span>{{ '%.1f'|format(profile.filament_used_g) }} g used</span>{% endif %}
       </div>
-      <div class="card-actions"><a class="text-link" href="{{ profile.edit_path }}">Edit print result</a></div>
-      {% if profile.notes %}<p class="profile-note">{{ profile.notes }}</p>{% endif %}
+      <span>{% if profile.product_spool_path %}<a class="text-link" href="{{ profile.product_spool_path }}">{{ profile.product_spool_code }}</a>{% else %}Generic{% endif %}</span>
+      <a href="/materials/{{ profile.material_slug }}">{{ profile.material_name }}</a>
+      <span>{{ profile.printer_name or 'No printer' }}</span>
+      <span>{{ profile.nozzle_label or profile.nozzle_diameter ~ ' mm' }}{% if profile.print_duration_hours %}<br><small>{{ profile.print_duration_label }}</small>{% endif %}</span>
+      <span>{% if profile.filament_used_g %}{{ '%.1f'|format(profile.filament_used_g) }} g{% else %}-{% endif %}</span>
+      <span>{{ profile.result_rating }}/5</span>
+      <div class="row-actions">
+        {% if profile.product_spool_path %}<a class="text-link" href="{{ profile.product_spool_path }}">Inspect</a>{% endif %}
+        <a class="text-link" href="{{ profile.edit_path }}">Edit</a>
+      </div>
     </div>
-  </article>
-{% else %}
-  <div class="empty-state">No tests logged yet. Open a material or spool and save the first print result.</div>
-{% endfor %}
+  {% else %}
+    <div class="empty-state">No print results logged yet. Open a material or spool and save the first result.</div>
+  {% endfor %}
 </section>
 {% endblock %}

@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}{% if mode == 'create' %}Add maintenance{% else %}Edit maintenance{% endif %} - Material Lab{% endblock %}
+{% block content %}
+<section class="page-header">
+  <div>
+    <span class="eyebrow">MAINTENANCE</span>
+    <h1>{% if mode == 'create' %}Add maintenance entry{% else %}Edit maintenance entry{% endif %}</h1>
+    <p>{{ printer.name }}</p>
+  </div>
+  <a class="button secondary" href="/printers/{{ printer.id }}#maintenance">Cancel</a>
+</section>
+
+<form class="material-form panel" action="{% if mode == 'create' %}/printers/{{ printer.id }}/maintenance/new{% else %}/printers/{{ printer.id }}/maintenance/{{ entry.id }}/edit{% endif %}" method="post">
+  <div class="panel-title"><span class="eyebrow">SERVICE LOG</span><h2>Replaced parts and maintenance</h2></div>
+  <section class="form-section">
+    <div class="form-grid">
+      <label>Date<input required type="date" name="maintenance_date" value="{{ entry.maintenance_date }}"></label>
+      <label>Maintenance type
+        <select name="maintenance_type">
+          {% for option in maintenance_type_options %}
+            <option value="{{ option }}" {% if entry.maintenance_type == option %}selected{% endif %}>{{ option }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Component / part name<input name="component" value="{{ entry.component }}" placeholder="Hotend, belts, build plate"></label>
+      <label>Cost in EUR<input type="number" min="0" step="0.01" name="cost_eur" value="{{ entry.cost_eur if entry.cost_eur is not none else '' }}"></label>
+      <label>Printer hours at maintenance<input type="number" min="0" step="0.1" name="printer_hours" value="{{ entry.printer_hours if entry.printer_hours is not none else '' }}"></label>
+      <label class="span-all">Description / notes<textarea name="notes" placeholder="Replaced hotend, changed belts, lubricated rails...">{{ entry.notes }}</textarea></label>
+    </div>
+  </section>
+  <div class="form-actions">
+    <a class="button secondary" href="/printers/{{ printer.id }}#maintenance">Cancel</a>
+    <button class="button primary" type="submit">Save maintenance entry</button>
+  </div>
+</form>
+{% endblock %}

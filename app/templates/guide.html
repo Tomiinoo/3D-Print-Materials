@@ -1,76 +1,72 @@
 {% extends "base.html" %}
-{% block title %}Material Lab — Material Guide{% endblock %}
+{% block title %}Material Lab - Material Guide{% endblock %}
 {% block content %}
-<section class="page-hero compact">
-  <div><span class="eyebrow">MATERIAL CHOICE GUIDE</span><h1>Describe the job. Get a transparent shortlist.</h1><p>This ranks the seeded comparison values. It shows why a material ranked well and where the compromise still is—there is no fake “one best filament”.</p></div>
+<section class="page-header">
+  <div>
+    <span class="eyebrow">MATERIAL DATABASE</span>
+    <h1>Material Guide</h1>
+    <p>Select requirements to rank suitable material families.</p>
+  </div>
 </section>
 
 <section class="guide-layout">
   <article class="panel guide-controls">
-    <div class="panel-title"><span class="eyebrow">1. WHAT MUST THE PART DO?</span><h2>Select every requirement that matters.</h2></div>
-    <div class="requirement-grid" id="guide-requirements">
-      <button data-need="general"><span>◉</span><b>General functional</b><small>Easy, useful, not extreme</small></button>
-      <button data-need="outdoor"><span>☀</span><b>Outdoor / UV</b><small>Sun, rain, weather</small></button>
-      <button data-need="flexible"><span>⌁</span><b>Flexible / damping</b><small>Grip, seal, tyre, bumper</small></button>
-      <button data-need="heat"><span>♨</span><b>High heat</b><small>Warm machine / car area</small></button>
-      <button data-need="stiff"><span>◫</span><b>High stiffness</b><small>Bracket / fixture / frame</small></button>
-      <button data-need="impact"><span>⬡</span><b>Impact / fatigue</b><small>Clip, mechanism, abuse</small></button>
-      <button data-need="chemical"><span>◈</span><b>Water / chemicals</b><small>Container / exposed part</small></button>
-      <button data-need="cheap"><span>€</span><b>Lower cost</b><small>Rapid iteration / volume</small></button>
+    <div class="panel-title"><span class="eyebrow">REQUIREMENTS</span><h2>Part requirements</h2></div>
+    <div class="requirement-group">
+      <h3>Environment</h3>
+      <div class="requirement-grid" id="guide-requirements">
+        <button data-need="outdoor"><b>Outdoor / UV</b><small>Sun, rain, weather</small></button>
+        <button data-need="chemical"><b>Water / chemicals</b><small>Containers, exposure, cleaning</small></button>
+        <button data-need="heat"><b>High heat</b><small>Warm machine or car area</small></button>
+        <button data-need="general"><b>General functional</b><small>Useful, non-extreme parts</small></button>
+        <button data-need="stiff"><b>High stiffness</b><small>Brackets, fixtures, frames</small></button>
+        <button data-need="impact"><b>Impact / fatigue</b><small>Clips, mechanisms, abuse</small></button>
+        <button data-need="flexible"><b>Flexible / damping</b><small>Grips, seals, bumpers</small></button>
+        <button data-need="cheap"><b>Lower cost</b><small>Iteration or large parts</small></button>
+      </div>
     </div>
-    <label class="state-select guide-state">Condition
-      <select id="guide-state"><option value="dry">Dry / freshly dried</option><option value="wet">Moisture-conditioned / wet</option></select>
-    </label>
-    <label class="state-select guide-state">Printer / path
-      <select id="guide-printer-filter">
-        <option value="all">Any saved printer</option>
-        <option value="main-path">X2D Prime nozzle / direct path</option>
-        <option value="aux-path">X2D Aux nozzle / auxiliary path</option>
-        <option value="ams-compatible">AMS compatible</option>
-        {% for printer in printers %}
-          <option value="printer-{{ printer.slug }}">{{ printer.name }}</option>
-        {% endfor %}
-      </select>
-    </label>
+    <div class="guide-select-grid">
+      <label class="state-select guide-state">Condition
+        <select id="guide-state"><option value="dry">Dry / freshly dried</option><option value="wet">Moisture-conditioned / wet</option></select>
+      </label>
+      <label class="state-select guide-state">Printer / path
+        <select id="guide-printer-filter">
+          <option value="all">Any saved printer</option>
+          <option value="main-path">X2D Prime nozzle / direct path</option>
+          <option value="aux-path">X2D Aux nozzle / auxiliary path</option>
+          <option value="ams-compatible">AMS compatible</option>
+          {% for printer in printers %}
+            <option value="printer-{{ printer.slug }}">{{ printer.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
     <details class="guide-advanced">
       <summary>Advanced real-value filters</summary>
       <div class="advanced-filter-grid">
-        <label>Minimum HDT
-          <input type="range" min="0" max="300" step="5" value="0" data-guide-filter="min-hdt">
-          <output data-guide-output="min-hdt">Any</output>
-        </label>
-        <label>Minimum tensile strength
-          <input type="range" min="0" max="250" step="5" value="0" data-guide-filter="min-tensile">
-          <output data-guide-output="min-tensile">Any</output>
-        </label>
-        <label>Minimum modulus
-          <input type="range" min="0" max="25" step="0.5" value="0" data-guide-filter="min-modulus">
-          <output data-guide-output="min-modulus">Any</output>
-        </label>
-        <label>Maximum tracked price
-          <input type="range" min="0" max="150" step="1" value="0" data-guide-filter="max-price">
-          <output data-guide-output="max-price">Any</output>
-        </label>
+        <label>Minimum HDT<input type="range" min="0" max="300" step="5" value="0" data-guide-filter="min-hdt"><output data-guide-output="min-hdt">Any</output></label>
+        <label>Minimum tensile strength<input type="range" min="0" max="250" step="5" value="0" data-guide-filter="min-tensile"><output data-guide-output="min-tensile">Any</output></label>
+        <label>Minimum modulus<input type="range" min="0" max="25" step="0.5" value="0" data-guide-filter="min-modulus"><output data-guide-output="min-modulus">Any</output></label>
+        <label>Maximum tracked price<input type="range" min="0" max="150" step="1" value="0" data-guide-filter="max-price"><output data-guide-output="max-price">Any</output></label>
       </div>
       <button class="button small secondary" type="button" id="guide-reset-filters">Reset real filters</button>
     </details>
-    <button class="button primary" id="guide-run">Rank materials →</button>
+    <button class="button primary" id="guide-run">Rank materials</button>
   </article>
 
   <article class="panel guide-explainer">
-    <span class="eyebrow">HOW THE GUIDE THINKS</span><h2>Weighted trade-offs, not marketing.</h2>
+    <span class="eyebrow">METHOD</span><h2>How ranking works</h2>
     <ul class="behaviour-list">
-      <li><b>Outdoor</b> weighs UV, water and heat.</li>
-      <li><b>Stiff</b> weighs XY rigidity and strength, but shows the impact trade-off.</li>
-      <li><b>Impact</b> weighs impact and layer adhesion—fibre-filled composites naturally tend to lose points here.</li>
-      <li><b>High heat</b> weighs heat score plus HDT.</li>
-      <li><b>Low cost</b> favours lower price-range scores and printability.</li>
+      <li><b>Environment</b> uses UV, water, chemical, and heat values.</li>
+      <li><b>Mechanical</b> uses rigidity, strength, impact, and layer adhesion scores.</li>
+      <li><b>Manufacturing</b> uses printability, drying needs, and printer/path filters.</li>
+      <li><b>Cost</b> uses tracked price where available and printability.</li>
     </ul>
-    <div class="engineering-callout warning-callout">The answer is a shortlist. Confirm the selected exact spool’s TDS, actual dryness and printed load direction before designing around it.</div>
+    <div class="engineering-callout warning-callout">Use the shortlist to choose candidates. Confirm exact product TDS, dryness, and load direction before relying on a part.</div>
   </article>
 </section>
 
-<section class="section-heading"><div><span class="eyebrow">2. RANKED SHORTLIST</span><h2 id="guide-heading">Choose one or more requirements.</h2></div></section>
+<section class="section-heading"><div><span class="eyebrow">RANKED SHORTLIST</span><h2 id="guide-heading">Choose one or more requirements.</h2></div></section>
 <section id="guide-results" class="guide-results"><div class="empty-state">Select requirements above, then rank materials.</div></section>
 <script id="guide-material-data" type="application/json">{{ materials | tojson }}</script>
 <script id="guide-printer-data" type="application/json">{{ printers | tojson }}</script>

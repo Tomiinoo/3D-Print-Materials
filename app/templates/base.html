@@ -12,27 +12,40 @@
     <aside class="sidebar" id="sidebar">
       <a class="brand" href="/">
         <span class="brand-mark">ML</span>
-        <span><strong>Material Lab</strong><small>Local engineering library</small></span>
+        <span><strong>Material Lab</strong><small>Workshop materials log</small></span>
       </a>
-      <nav class="nav">
-        {% for label, href, key in nav %}
-          <a href="{{ href }}" class="nav-link {% if key == page_name %}is-active{% endif %}">
-            <span class="nav-dot"></span>{{ label }}
-          </a>
+      <nav class="nav" aria-label="Primary navigation">
+        {% for group in nav_groups %}
+          <div class="nav-group">
+            <span class="nav-group-label">{{ group.label }}</span>
+            {% for label, href, key in group.items %}
+              <a href="{{ href }}" class="nav-link {% if key == page_name %}is-active{% endif %}">
+                <span class="nav-dot"></span>{{ label }}
+              </a>
+            {% endfor %}
+          </div>
         {% endfor %}
       </nav>
       <div class="sidebar-note">
-        <strong>Local-first</strong>
-        <span>Your prices, profiles and notes live in your own SQLite database.</span>
+        <strong>Local data</strong>
+        <span>SQLite data, prices, spools, and print notes stay on this machine.</span>
       </div>
     </aside>
     <main class="main-content">
       <header class="topbar">
-        <button class="mobile-menu" aria-label="Open menu" data-sidebar-toggle>☰</button>
-        <div class="breadcrumb">MATERIAL LAB <span>/</span> {{ page_name | upper }}</div>
+        <button class="mobile-menu" aria-label="Open menu" data-sidebar-toggle>Menu</button>
+        <div class="breadcrumb">MATERIAL LAB <span>/</span> {{ page_label }}</div>
         <div class="topbar-actions">
-          <a class="icon-button" href="/materials/new" title="Add material">＋</a>
-          <a class="avatar" href="/settings" title="Settings">T</a>
+          <details class="add-menu">
+            <summary>Add</summary>
+            <div class="add-menu-panel">
+              <a href="/materials">Add spool</a>
+              <a href="/profiles/new">Add print result</a>
+              <a href="/materials/new">Add material</a>
+              <a href="/printers/new">Add printer</a>
+            </div>
+          </details>
+          <a class="topbar-link" href="/settings" title="Settings">Settings</a>
         </div>
       </header>
       <section class="page-wrap">

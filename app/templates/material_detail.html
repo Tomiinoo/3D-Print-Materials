@@ -1,300 +1,271 @@
 {% extends "base.html" %}
-{% block title %}{{ material.name }} — Material Lab{% endblock %}
+{% block title %}{{ material.name }} - Material Lab{% endblock %}
 {% block content %}
-<section class="material-hero" style="--material-color: {{ material.family_color }}">
-  <div class="material-hero-copy">
-    <a class="back-link" href="/materials">← Back to materials</a>
-    <div class="hero-tags"><span class="family-pill">{{ material.family }}</span><span class="subfamily-pill {% if 'Carbon' in material.subfamily %}cf{% elif 'Glass' in material.subfamily %}gf{% endif %}">{{ material.subfamily }}</span></div>
-    <h1>{{ material.name }}</h1>
-    <h2>{{ material.full_name }}</h2>
-    <p>{{ material.description }}</p>
-    <div class="status-row">
-      <span class="status-chip">{% if material.compatibility.direct_path %}DIRECT PATH ✓{% else %}DIRECT PATH —{% endif %}</span>
-      <span class="status-chip {% if not material.compatibility.aux_path %}warning{% endif %}">{% if material.compatibility.aux_path %}AUX PATH ✓{% else %}AUX PATH NO{% endif %}</span>
-      <span class="status-chip {% if not material.compatibility.ams %}warning{% endif %}">{% if material.compatibility.ams %}AMS ✓{% else %}AMS NO{% endif %}</span>
-      <span class="status-chip muted">{{ material.settings.recommended_nozzle }}</span>
+<section class="record-header" style="--material-color: {{ material.family_color }}">
+  <div>
+    <a class="back-link" href="/materials">Back to Material Library</a>
+    <div class="record-kicker">
+      <span class="family-pill">{{ material.family }}</span>
+      <span class="subfamily-pill {% if 'Carbon' in material.subfamily %}cf{% elif 'Glass' in material.subfamily %}gf{% endif %}">{{ material.subfamily }}</span>
+      {% if material.is_catalog %}<span class="status-chip muted">Catalogue reference</span>{% else %}<span class="status-chip">Editable material</span>{% endif %}
+      {% if material.product_count %}<span class="status-chip">Has active spool</span>{% endif %}
     </div>
+    <h1>{{ material.name }}</h1>
+    <p class="record-subtitle">{{ material.full_name }}</p>
+    <p>{{ material.description }}</p>
   </div>
-  <div class="molecule-card">
-    <span>POLYMER FORMULA</span><strong>{{ material.formula }}</strong>
-    <div class="repeat-unit">{{ material.repeat_unit }}</div>
-    <small>Repeat unit / simplified structural notation</small>
-  </div>
-</section>
-
-<section class="stat-band">
-  <article><span>Density</span><b>{{ material.real_properties.density_g_cm3.label or '—' }}</b><small>{{ '%.5f'|format(material.properties.mass_g_mm3) }} g/mm³</small></article>
-  <article><span>HDT guide</span><b>{% if material.real_properties.hdt_c.label %}{{ material.real_properties.hdt_c.label }}{% else %}Not structural{% endif %}</b><small>Exact grade + load dependent</small></article>
-  <article><span>Continuous guide</span><b>{% if material.real_properties.continuous_service_c.label %}{{ material.real_properties.continuous_service_c.label }}{% else %}—{% endif %}</b><small>Conservative material-selection estimate</small></article>
-  <article><span>Moisture sensitivity</span><b>{{ material.properties.moisture_sensitivity }}/10</b><small>{% if material.properties.moisture_sensitivity >= 8 %}Dry before serious prints{% else %}Store dry for repeatability{% endif %}</small></article>
-</section>
-
-<section class="confidence-strip" aria-label="Data confidence">
-  {% for item in material.confidence_items %}
-    <article class="confidence-item confidence-item--{{ item.kind }}">
-      <span>{{ item.label }}</span>
-      <strong>{{ item.value }}</strong>
-    </article>
-  {% endfor %}
-</section>
-
-<section class="material-workbench" aria-label="Material workspace">
-  <div class="material-workbench__links">
-    <a href="#overview">Overview</a>
-    <a href="#real-values">Real values</a>
-    {% if not material.is_catalog %}
-      <a href="#products">Spools</a>
-      <a href="#profiles">Print tests</a>
-    {% endif %}
-    <a href="#source">Source</a>
-  </div>
-  <div class="material-workbench__actions">
+  <div class="page-actions">
     {% if material.is_catalog %}
-      <form action="/materials/{{ material.slug }}/promote" method="post" class="material-workbench__form">
-        <button class="button primary" type="submit">Make editable copy</button>
+      <form action="/materials/{{ material.slug }}/promote" method="post" class="inline-form">
+        <button class="button primary" type="submit">Create editable copy</button>
       </form>
     {% else %}
-      <button class="button secondary" type="button" data-toggle="add-product" data-scroll-target="add-product">I bought this spool</button>
-      <button class="button secondary" type="button" data-toggle="add-profile" data-scroll-target="add-profile">Save print result</button>
-      <a class="button secondary" href="/materials/{{ material.slug }}/edit">Edit data</a>
+      <button class="button primary" type="button" data-toggle="add-product" data-scroll-target="add-product">Add spool</button>
+      <button class="button secondary" type="button" data-toggle="add-profile" data-scroll-target="add-profile">Add print result</button>
+      <a class="button secondary" href="/materials/{{ material.slug }}/edit">Edit material</a>
     {% endif %}
+  </div>
+</section>
+
+<section class="summary-strip">
+  <article><span>Density</span><strong>{{ material.real_properties.density_g_cm3.label or '-' }}</strong></article>
+  <article><span>HDT guide</span><strong>{{ material.real_properties.hdt_c.label or 'No stored value' }}</strong></article>
+  <article><span>Continuous use</span><strong>{{ material.real_properties.continuous_service_c.label or '-' }}</strong></article>
+  <article><span>Moisture</span><strong>{{ material.real_properties.moisture_sensitivity.label or material.properties.moisture_sensitivity or '-' }}</strong></article>
+  <article><span>Printer fit</span><strong>{% if material.compatibility.direct_path %}Direct OK{% else %}Review path{% endif %}</strong></article>
+</section>
+
+<section class="material-workbench" aria-label="Material sections">
+  <div class="material-workbench__links">
+    <a href="#overview">Overview</a>
+    <a href="#properties">Engineering properties</a>
+    <a href="#print-settings">Print settings</a>
+    <a href="#compatibility">Compatibility</a>
+    {% if not material.is_catalog %}
+      <a href="#products">Your spools</a>
+      <a href="#profiles">Print results</a>
+    {% endif %}
+    <a href="#source">Sources</a>
   </div>
 </section>
 
 <section class="detail-grid material-overview-grid anchored" id="overview">
-  <div class="material-side-stack">
   <article class="panel process-panel">
-    <div class="panel-title"><span class="eyebrow">PROCESS RECIPE</span><h2>Starting settings</h2></div>
-    <dl class="recipe-grid">
-      <div><dt>Nozzle</dt><dd>{{ material.settings.nozzle }}</dd></div>
-      <div><dt>Bed</dt><dd>{{ material.settings.bed }}</dd></div>
-      <div><dt>Chamber</dt><dd>{{ material.settings.chamber }}</dd></div>
-      <div><dt>Print speed</dt><dd>{{ material.settings.speed }}</dd></div>
-      <div><dt>Drying</dt><dd>{{ material.settings.drying }}</dd></div>
-      <div><dt>Cooling</dt><dd>{{ material.settings.cooling }}</dd></div>
+    <div class="panel-title"><span class="eyebrow">OVERVIEW</span><h2>Use and limits</h2></div>
+    <dl class="info-list">
+      <div><dt>Best for</dt><dd>{{ material.best_for }}</dd></div>
+      <div><dt>Avoid for</dt><dd>{{ material.avoid_for }}</dd></div>
+      <div><dt>Source state</dt><dd>{% if material.is_catalog %}Catalogue reference; make an editable copy before attaching spools.{% else %}Local editable material record.{% endif %}</dd></div>
     </dl>
-    <div class="engineering-callout warning-callout"><strong>Dryness matters:</strong> a test result made with damp material is not the same material state. Log the dryer settings in your saved profile.</div>
   </article>
-
-  <section class="panel compatibility-panel">
-    <div class="panel-title">
-      <span class="eyebrow">PRINTER FIT</span>
-      <h2>Compatibility guidance</h2>
-    </div>
-    <div class="profile-specs">
-      <span>{% if material.compatibility.direct_path %}Direct path OK{% else %}Direct path needs review{% endif %}</span>
-      <span>{% if material.compatibility.aux_path %}Aux path OK{% else %}Aux path not recommended{% endif %}</span>
-      <span>{% if material.compatibility.ams %}AMS compatible{% else %}AMS not recommended{% endif %}</span>
-      {% if material.compatibility.requires_enclosure %}<span>Enclosure recommended</span>{% endif %}
-    </div>
-    <p class="body-copy">
-      {% if material.compatibility.printer_match_labels %}
-        Matches: {{ material.compatibility.printer_match_labels | join(', ') }}.
-      {% else %}
-        No saved printer preset is an automatic match. Review nozzle, bed, enclosure and filament path before printing.
-      {% endif %}
-    </p>
-  </section>
 
   <article class="panel readiness-panel">
-    <div class="panel-title">
-      <span class="eyebrow">READY FOR ENGINEERING?</span>
-      <h2>Trust checklist</h2>
-    </div>
+    <div class="panel-title"><span class="eyebrow">SOURCE AND CONFIDENCE</span><h2>Trust checklist</h2></div>
     <ul class="readiness-list">
       {% for item in material.readiness_items %}
-        <li class="{% if item.done %}is-done{% endif %}"><span>{% if item.done %}✓{% else %}—{% endif %}</span>{{ item.label }}</li>
+        <li class="{% if item.done %}is-done{% endif %}"><span>{% if item.done %}OK{% else %}-{% endif %}</span>{{ item.label }}</li>
       {% endfor %}
     </ul>
   </article>
+</section>
 
-  <article class="panel decision-panel good">
-    <span class="eyebrow">CHOOSE IT FOR</span><h3>{{ material.best_for }}</h3>
-  </article>
-  <article class="panel decision-panel bad">
-    <span class="eyebrow">DO NOT CHOOSE IT FOR</span><h3>{{ material.avoid_for }}</h3>
-  </article>
-  <article class="panel property-notes">
-    <span class="eyebrow">MATERIAL BEHAVIOUR</span>
-    <ul class="behaviour-list">
-      <li><b>Water:</b> {{ material.properties.water_resistance }}/10</li>
-      <li><b>Chemicals:</b> {{ material.properties.chemical_resistance }}/10</li>
-      <li><b>Flame behaviour:</b> {{ material.properties.flame_resistance }}/10 <small>Not a fire certification.</small></li>
-      <li><b>UV:</b> {{ material.properties.uv_resistance }}/10</li>
-      <li><b>Impact:</b> {{ material.properties.impact_note }}</li>
-      <li><b>Shrinkage:</b> {{ material.properties.shrinkage_note }}</li>
-    </ul>
-  </article>
+<section class="panel properties-panel anchored" id="properties">
+  <div class="panel-title">
+    <span class="eyebrow">ENGINEERING PROPERTIES</span>
+    <h2>Stored values and orientation scores</h2>
+    <p>Real values are shown first when saved. Scores are comparative orientation aids.</p>
   </div>
-
-  <article class="panel properties-panel anchored" id="real-values">
-    <div class="panel-title">
-      <span class="eyebrow">ENGINEERING BEHAVIOUR</span>
-      <h2>Scores + real values</h2>
-      <p>Scores are quick orientation. Use the stored value box as the engineering reference.</p>
-    </div>
-    <div class="score-list engineering-score-list">
-      {% for row in material.engineering_rows %}
-      <div class="score-row engineering-score-row">
-        <span class="score-name">{{ row.label }}</span>
-        <div class="score-track"><i style="width: {{ row.score_percent }}%"></i></div>
-        <b>{{ row.score }}/10</b>
-        <details class="score-real score-real--{{ row.real_kind }}">
-          <summary>
-            <small>{{ row.real_label }}</small>
-            <strong>{{ row.real_value }}</strong>
-          </summary>
-          <p><b>Evidence:</b> {{ material.source_notes or material.source_title or 'No detailed source saved for this value yet.' }}</p>
-        </details>
+  <div class="property-table">
+    <div class="property-row property-row--head"><span>Property</span><span>Stored value</span><span>Score</span><span>Evidence</span></div>
+    {% for row in material.engineering_rows %}
+      <div class="property-row">
+        <strong>{{ row.label }}</strong>
+        <span>{{ row.real_value }}</span>
+        <span>{{ row.score }}/10</span>
+        <small>{{ row.real_label }}</small>
       </div>
-      {% endfor %}
+    {% endfor %}
+  </div>
+</section>
+
+<section class="detail-grid anchored" id="print-settings">
+  <article class="panel process-panel">
+    <div class="panel-title"><span class="eyebrow">PRINT SETTINGS</span><h2>Starting process window</h2></div>
+    <dl class="recipe-grid">
+      <div><dt>Nozzle</dt><dd>{{ material.settings.nozzle or '-' }}</dd></div>
+      <div><dt>Bed</dt><dd>{{ material.settings.bed or '-' }}</dd></div>
+      <div><dt>Chamber</dt><dd>{{ material.settings.chamber or '-' }}</dd></div>
+      <div><dt>Speed</dt><dd>{{ material.settings.speed or '-' }}</dd></div>
+      <div><dt>Drying</dt><dd>{{ material.settings.drying or '-' }}</dd></div>
+      <div><dt>Cooling</dt><dd>{{ material.settings.cooling or '-' }}</dd></div>
+    </dl>
+  </article>
+
+  <article class="panel compatibility-panel anchored" id="compatibility">
+    <div class="panel-title"><span class="eyebrow">PRINTER COMPATIBILITY</span><h2>Fit checks</h2></div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Path / printer</th><th>Compatibility</th><th>Requirement</th><th>Reason</th></tr></thead>
+        <tbody>
+          <tr><td>Direct path</td><td>{% if material.compatibility.direct_path %}Compatible{% else %}Not recommended{% endif %}</td><td>{{ material.settings.recommended_nozzle or 'Review nozzle' }}</td><td>Material path and nozzle guidance.</td></tr>
+          <tr><td>Aux path</td><td>{% if material.compatibility.aux_path %}Compatible{% else %}Not recommended{% endif %}</td><td>Review feed path</td><td>Flexible, brittle, or filled materials may need direct feed.</td></tr>
+          <tr><td>AMS / multi-spool</td><td>{% if material.compatibility.ams %}Compatible{% else %}Not recommended{% endif %}</td><td>Check spool and feed path</td><td>Compatibility is based on saved material guidance.</td></tr>
+          {% if material.compatibility.printer_match_labels %}
+            <tr><td>Saved printers</td><td>Matched</td><td>{{ material.compatibility.printer_match_labels | join(', ') }}</td><td>Preset temperature and feature limits matched.</td></tr>
+          {% else %}
+            <tr><td>Saved printers</td><td>Needs review</td><td>No automatic match</td><td>Review nozzle, bed, enclosure, and filament path.</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
     </div>
   </article>
 </section>
 
 {% if material.is_catalog %}
 <section class="source-footnote anchored" id="source">
-  <strong>Read-only catalog entry:</strong>
-  This material comes from the approximate family-level catalog. Make an editable saved copy before attaching spools, prices or print profiles. Once saved, that local record is shown in the library, guide and compare screens instead of this approximate catalog entry.
-  <br><strong>Source:</strong> {{ material.source_title }}{% if material.source_url %} · <a class="text-link" target="_blank" rel="noopener" href="{{ material.source_url }}">Open source ↗</a>{% endif %}
+  <strong>Catalogue reference:</strong>
+  Make an editable saved copy before attaching spools, prices, or print profiles.
+  <br><strong>Source:</strong> {{ material.source_title }}{% if material.source_url %} / <a class="text-link" target="_blank" rel="noopener" href="{{ material.source_url }}">Open source</a>{% endif %}
   <form action="/materials/{{ material.slug }}/promote" method="post" class="source-actions">
-    <button class="button primary" type="submit">Make editable saved copy →</button>
+    <button class="button primary" type="submit">Create editable copy</button>
   </form>
 </section>
 {% else %}
 <section class="section-heading anchored" id="products">
-  <div><span class="eyebrow">YOUR SUPPLIERS + SPOOL PRICES</span><h2>Exact products under {{ material.name }}</h2></div>
-  <button class="button secondary" data-toggle="add-product" data-scroll-target="add-product">＋ I bought this spool</button>
+  <div><span class="eyebrow">YOUR SPOOLS</span><h2>Exact products under {{ material.name }}</h2></div>
+  <button class="button secondary" data-toggle="add-product" data-scroll-target="add-product">Add spool</button>
 </section>
 
 <div class="expand-box" id="add-product" hidden>
   <form action="/materials/{{ material.slug }}/products" method="post" class="spool-wizard">
-    <section class="wizard-step wizard-step--selected">
-      <span>1</span>
-      <div><b>Material selected</b><p>{{ material.name }} · {{ material.full_name }}</p></div>
+    <section class="form-section">
+      <h3>Material selected</h3>
+      <p>{{ material.name }} / {{ material.full_name }}</p>
     </section>
-    <section class="wizard-step">
-      <span>2</span>
-      <div>
-        <b>Brand and exact product</b>
-        <div class="wizard-fields">
-          <label>Brand<input required name="brand" placeholder="Bambu Lab / Polymaker / Extrudr"></label>
-          <label>Exact product<input required name="product_name" placeholder="PA6-CF Black"></label>
-          <label>Colour<input name="color_name" placeholder="Black"></label>
-        </div>
+    <section class="form-section">
+      <h3>Exact spool identity</h3>
+      <div class="wizard-fields">
+        <label>Brand<input required name="brand" placeholder="Bambu Lab / Polymaker / Extrudr"></label>
+        <label>Exact product<input required name="product_name" placeholder="PA6-CF Black"></label>
+        <label>Colour<input name="color_name" placeholder="Black"></label>
+        <label>Spool code<input name="spool_code" placeholder="Leave blank for next {{ material.name }} number"></label>
+        <label>Spool mass (g)<input required type="number" min="1" step="1" name="spool_weight_g" value="1000"></label>
+        <label>Initial spool price (&euro;)<input type="number" min="0" step="0.01" name="first_price_eur" placeholder="24.99"></label>
+        <label>Initial price date<input type="date" name="first_price_observed_on" value="{{ today }}"></label>
       </div>
     </section>
-    <section class="wizard-step">
-      <span>3</span>
-      <div>
-        <b>Spool identity</b>
-        <div class="wizard-fields">
-          <label>Spool number<input name="spool_code" placeholder="Leave blank for next {{ material.name }} number"></label>
-          <label>Spool mass (g)<input required type="number" min="1" step="1" name="spool_weight_g" value="1000"></label>
-          <label>Initial spool price (€)<input type="number" min="0" step="0.01" name="first_price_eur" placeholder="24.99"></label>
-          <label>Initial price date<input type="date" name="first_price_observed_on" value="{{ today }}"></label>
-        </div>
+    <section class="form-section">
+      <h3>Supplier and notes</h3>
+      <div class="wizard-fields">
+        <label>Supplier / shop<input name="supplier" placeholder="Shop name"></label>
+        <label class="span-all">Product URL<input type="url" name="url" placeholder="https://..."></label>
+        <label class="check-label"><input type="checkbox" name="favorite"> Preferred / buy again</label>
+        <label class="span-all">Notes<textarea name="notes" placeholder="Supplier experience, TDS link, drying result, spool quality"></textarea></label>
       </div>
     </section>
-    <section class="wizard-step">
-      <span>4</span>
-      <div>
-        <b>Supplier</b>
-        <div class="wizard-fields">
-          <label>Supplier / shop<input name="supplier" placeholder="Shop name"></label>
-          <label>Product URL<input type="url" name="url" placeholder="https://…"></label>
-          <label class="check-label"><input type="checkbox" name="favorite"> Would buy again / preferred</label>
-        </div>
-      </div>
-    </section>
-    <section class="wizard-step">
-      <span>5</span>
-      <div>
-        <b>Printer fit to verify</b>
-        <div class="profile-specs">
-          <span>{% if material.compatibility.direct_path %}Direct path OK{% else %}Direct path review{% endif %}</span>
-          <span>{% if material.compatibility.aux_path %}Aux path OK{% else %}Aux path not recommended{% endif %}</span>
-          <span>{% if material.compatibility.ams %}AMS OK{% else %}AMS not recommended{% endif %}</span>
-          <span>{{ material.settings.recommended_nozzle }}</span>
-        </div>
-        <label>Your notes<textarea name="notes" placeholder="Supplier experience, spool quality, drying result, TDS link, printer path caveat"></textarea></label>
-      </div>
-    </section>
-    <div class="form-actions"><button class="button primary" type="submit">Save numbered spool →</button></div>
+    <div class="form-actions"><button class="button primary" type="submit">Save spool</button></div>
   </form>
 </div>
 
-<section class="product-grid">
-{% for product in material.products %}
-  <article class="product-card">
-    <div class="product-card-head"><div><a class="eyebrow spool-code-link" href="{{ product.spool_path }}">{{ product.spool_code }}</a><h3>{{ product.product_name }}</h3><p>{{ product.brand }} · {{ product.supplier or 'No supplier noted' }}{% if product.color_name %} · {{ product.color_name }}{% endif %}</p></div>{% if product.favorite %}<span class="favorite">★ Preferred</span>{% endif %}</div>
-    <div class="price-block">{% if product.price_per_kg %}<span>Current tracked price</span><strong>€{{ '%.2f'|format(product.price_per_kg) }}<small>/kg</small></strong><p>€{{ '%.2f'|format(product.latest_price_eur) }} per {{ product.spool_weight_g|int }} g · {{ product.price_observed_on }}</p>{% else %}<span>No price logged yet</span><strong>—</strong>{% endif %}</div>
-    <div class="spool-usage"><span style="width: {{ product.remaining_percent }}%"></span></div>
-    <p class="spool-usage-label">{{ '%.1f'|format(product.remaining_g) }} g left · {{ '%.1f'|format(product.filament_used_g) }} g used</p>
-    {% if product.notes %}<p class="product-note">{{ product.notes }}</p>{% endif %}
-    <div class="product-actions">
-      <a class="text-link" href="{{ product.spool_path }}">Inspect spool</a>
-      <a class="text-link" href="{{ product.spool_path }}/edit">Edit</a>
-      {% if product.url %}<a class="text-link" target="_blank" rel="noopener" href="{{ product.url }}">Open supplier ↗</a>{% endif %}
-      <button class="text-link" data-toggle="price-{{ product.id }}">Add price</button>
-      <form action="/products/{{ product.id }}/archive" method="post" class="inline-form"><input type="hidden" name="return_to" value="/materials/{{ material.slug }}#products"><button class="text-link danger-link" type="submit">Archive</button></form>
-      <form action="/products/{{ product.id }}/delete" method="post" class="inline-form" onsubmit="return confirm('Delete this exact spool and its price history forever? Print results will stay saved without this spool link.');"><input type="hidden" name="return_to" value="/materials/{{ material.slug }}#products"><button class="text-link danger-link" type="submit">Delete</button></form>
+<section class="workshop-table">
+  <div class="workshop-row workshop-row--head">
+    <span>Spool</span><span>Product</span><span>Remaining</span><span>Price</span><span>Prints</span><span>Actions</span>
+  </div>
+  {% for product in material.products %}
+    <div class="workshop-row">
+      <a class="spool-code-link" href="{{ product.spool_path }}">{{ product.spool_code }}</a>
+      <div><strong>{{ product.brand }} {{ product.product_name }}</strong><small>{{ product.supplier or 'No supplier' }}{% if product.color_name %} / {{ product.color_name }}{% endif %}</small></div>
+      <div><strong>{{ '%.1f'|format(product.remaining_g) }} / {{ product.spool_weight_g|int }} g</strong><div class="spool-usage"><span style="width: {{ product.remaining_percent }}%"></span></div></div>
+      <span>{% if product.price_per_kg %}&euro;{{ '%.2f'|format(product.price_per_kg) }}/kg{% else %}No price{% endif %}</span>
+      <span>{{ product.profile_count }}</span>
+      <div class="row-actions">
+        <a class="text-link" href="{{ product.spool_path }}">Inspect</a>
+        <a class="text-link" href="{{ product.spool_path }}/edit">Edit</a>
+        {% if product.url %}<a class="text-link" target="_blank" rel="noopener" href="{{ product.url }}">Supplier</a>{% endif %}
+        <button class="text-link" data-toggle="price-{{ product.id }}">Add price</button>
+        <form action="/products/{{ product.id }}/archive" method="post" class="inline-form"><input type="hidden" name="return_to" value="/materials/{{ material.slug }}#products"><button class="text-link" type="submit">Archive</button></form>
+      </div>
+      <form id="price-{{ product.id }}" action="/products/{{ product.id }}/prices" method="post" class="price-form" hidden>
+        <input type="hidden" name="return_to" value="/materials/{{ material.slug }}#products">
+        <label>Spool price (&euro;)<input type="number" name="price_eur" min="0" step="0.01" required></label>
+        <label>Date<input type="date" name="observed_on" value="{{ today }}"></label>
+        <label>Source<input name="source_label" placeholder="Manual / sale / supplier"></label>
+        <label>Stock note<input name="stock_note" placeholder="e.g. 5 kg bulk sale"></label>
+        <button class="button small primary" type="submit">Save price</button>
+      </form>
     </div>
-    <form id="price-{{ product.id }}" action="/products/{{ product.id }}/prices" method="post" class="price-form" hidden>
-      <input type="hidden" name="return_to" value="/materials/{{ material.slug }}#products">
-      <label>Spool price (€)<input type="number" name="price_eur" min="0" step="0.01" required></label>
-      <label>Date<input type="date" name="observed_on" value="{{ today }}"></label>
-      <label>Source<input name="source_label" placeholder="Manual / sale / supplier"></label>
-      <label>Stock note<input name="stock_note" placeholder="e.g. 5 kg bulk sale"></label>
-      <button class="button small" type="submit">Save price</button>
-    </form>
-    {% if product.price_entries %}<div class="price-history"><span>History</span>{% for entry in product.price_entries[:4] %}<div><b>€{{ '%.2f'|format(entry.price_eur) }}</b><small>{{ entry.observed_on }} · {{ entry.source_label }}</small></div>{% endfor %}</div>{% endif %}
-  </article>
-{% else %}
-  <div class="empty-state">No exact spool yet. Use “I bought this spool” so print tests and price history can attach to a real numbered spool.</div>
-{% endfor %}
+  {% else %}
+    <div class="empty-state">No exact spool yet. Add a physical spool so print tests and prices can attach to a real record.</div>
+  {% endfor %}
 </section>
 
 <section class="section-heading anchored" id="profiles">
-  <div><span class="eyebrow">YOUR REAL PRINT SETTINGS</span><h2>Saved profiles and lessons</h2></div>
-  <button class="button secondary" data-toggle="add-profile">＋ Save a print result</button>
+  <div><span class="eyebrow">PRINT RESULTS</span><h2>Saved settings and outcomes</h2></div>
+  <button class="button secondary" data-toggle="add-profile">Add print result</button>
 </section>
 
 <div class="expand-box" id="add-profile" hidden>
-<form action="/materials/{{ material.slug }}/profiles" method="post" class="form-grid">
-  <label>Profile name<input required name="profile_name" placeholder="0.6 TC — bracket test — dried"></label>
-  <label>Exact spool<select name="product_id"><option value="">Generic {{ material.name }}</option>{% for product in material.products %}<option value="{{ product.id }}">{{ product.spool_code }} — {{ product.brand }} — {{ product.product_name }} — {{ '%.1f'|format(product.remaining_g) }} g left</option>{% endfor %}</select></label>
-  <label>Printer<select name="printer_id"><option value="">Not specified</option>{% for printer in printers %}<option value="{{ printer.id }}">{{ printer.name }}</option>{% endfor %}</select></label>
+<form action="/materials/{{ material.slug }}/profiles" method="post" class="form-grid" enctype="multipart/form-data">
+  <label>Print/test name<input required name="profile_name" placeholder="Bracket test - dried"></label>
+  <label>Exact spool<select name="product_id"><option value="">Generic {{ material.name }}</option>{% for product in material.products %}<option value="{{ product.id }}">{{ product.spool_code }} - {{ product.brand }} - {{ product.product_name }} - {{ '%.1f'|format(product.remaining_g) }} g left</option>{% endfor %}</select></label>
+  <label>Printer<select name="printer_id" data-printer-select><option value="">Not specified</option>{% for printer in printers %}<option value="{{ printer.id }}">{{ printer.name }}</option>{% endfor %}</select></label>
+  <label>Nozzle<select name="printer_nozzle_id" data-nozzle-select><option value="">No nozzle / older record</option>{% for nozzle in nozzles %}<option value="{{ nozzle.id }}" data-printer-id="{{ nozzle.printer_id }}" data-diameter="{{ nozzle.diameter_mm }}">{{ nozzle.label_with_printer }}</option>{% endfor %}</select></label>
+  <label>Print date<input type="date" name="printed_on" value="{{ today }}"></label>
+  <label>Result rating<select name="result_rating"><option value="5">5 - excellent</option><option value="4">4 - good</option><option value="3" selected>3 - usable</option><option value="2">2 - weak / needs work</option><option value="1">1 - failed</option></select></label>
   <label>Material state<select name="state"><option>Dry</option><option>Conditioned / wet</option></select></label>
   <label>Nozzle diameter (mm)<input type="number" step="0.1" name="nozzle_diameter" value="0.4"></label>
-  <label>Nozzle temperature (°C)<input type="number" name="nozzle_temp"></label>
-  <label>Bed temperature (°C)<input type="number" name="bed_temp"></label>
-  <label>Chamber temperature (°C)<input type="number" name="chamber_temp"></label>
+  <label>Nozzle temperature (&deg;C)<input type="number" name="nozzle_temp"></label>
+  <label>Bed temperature (&deg;C)<input type="number" name="bed_temp"></label>
+  <label>Chamber temperature (&deg;C)<input type="number" name="chamber_temp"></label>
   <label>Speed (mm/s)<input type="number" name="speed_mm_s"></label>
-  <label>Dryer temp (°C)<input type="number" name="dryer_temp"></label>
+  <label>Dryer temp (&deg;C)<input type="number" name="dryer_temp"></label>
   <label>Dryer time (hours)<input type="number" step="0.5" name="dryer_hours"></label>
   <label>Filament used (g)<input type="number" min="0" step="0.1" name="filament_used_g" placeholder="42.5"></label>
+  <label>Print duration (hours)<input type="number" min="0" step="0.1" name="print_duration_hours" placeholder="2.5"></label>
   <label>Build plate<input name="build_plate" placeholder="Textured PEI / Engineering plate"></label>
-  <label>Result rating<select name="result_rating"><option value="5">5 — excellent</option><option value="4">4 — good</option><option value="3" selected>3 — usable</option><option value="2">2 — weak / needs work</option><option value="1">1 — failed</option></select></label>
-  <label>Print date<input type="date" name="printed_on" value="{{ today }}"></label>
-  <label class="span-all">Notes / what happened<textarea name="notes" placeholder="Warping, layer adhesion, finish, stress direction, what you would change next…"></textarea></label>
-  <div class="form-actions span-all"><button class="button primary" type="submit">Save test profile</button></div>
+  <p class="form-note span-all">Saving this result updates remaining mass for the selected spool.</p>
+  <label>Photos<input type="file" name="attachments" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" multiple></label>
+  <label>STL / 3MF<input type="file" name="attachments" accept=".stl,.3mf,model/stl,application/sla,application/vnd.ms-3mfdocument" multiple></label>
+  <p class="form-note span-all">Print duration contributes to selected nozzle hours. Attachments are stored in the local Material Lab data folder.</p>
+  <label class="span-all">Notes / outcome<textarea name="notes" placeholder="Warping, layer adhesion, finish, stress direction, next change"></textarea></label>
+  <div class="form-actions span-all"><button class="button primary" type="submit">Save print result</button></div>
 </form>
 </div>
 
-<section class="profile-list">
-{% for profile in profiles %}
-  <article class="profile-card">
-    <div class="profile-score">{{ profile.result_rating }}/5</div>
-    <div><h3>{{ profile.profile_name }}</h3><p>{% if profile.product_spool_path %}<a class="text-link" href="{{ profile.product_spool_path }}">{{ profile.product_spool_code }} · {{ profile.product_name }}</a>{% else %}{{ profile.product_name or 'Generic material profile' }}{% endif %} · {{ profile.printer_name or 'No printer saved' }} · {{ profile.state }} · {{ profile.printed_on }}</p><div class="profile-specs"><span>{{ profile.nozzle_diameter }} mm nozzle</span><span>{{ profile.nozzle_temp }} °C nozzle</span><span>{{ profile.bed_temp }} °C bed</span><span>{{ profile.chamber_temp }} °C chamber</span><span>{{ profile.speed_mm_s }} mm/s</span>{% if profile.filament_used_g %}<span>{{ '%.1f'|format(profile.filament_used_g) }} g used</span>{% endif %}</div><div class="card-actions"><a class="text-link" href="{{ profile.edit_path }}">Edit print result</a></div>{% if profile.notes %}<p class="profile-note">{{ profile.notes }}</p>{% endif %}</div>
-  </article>
-{% else %}
-  <div class="empty-state">No saved print result yet. Add the first test after you choose an exact spool and printer.</div>
-{% endfor %}
+<section class="workshop-table print-log-table">
+  <div class="workshop-row workshop-row--head">
+    <span>Date</span><span>Print/test</span><span>Spool</span><span>Printer</span><span>Nozzle</span><span>Used</span><span>Rating</span><span>Files</span><span>Action</span>
+  </div>
+  {% for profile in profiles %}
+    <div class="workshop-row">
+      <span>{{ profile.printed_on }}</span>
+      <div>
+        <strong>{{ profile.profile_name }}</strong>
+        {% if profile.notes %}<small>{{ profile.notes[:100] }}{% if profile.notes|length > 100 %}...{% endif %}</small>{% endif %}
+        {% if profile.attachments %}
+          <div class="attachment-inline">
+            {% for attachment in profile.attachments[:2] %}
+              <a href="{{ attachment.download_path }}" title="{{ attachment.original_filename }}">{% if attachment.is_photo %}<img src="{{ attachment.download_path }}" alt="">{% else %}{{ attachment.file_category }}{% endif %}</a>
+            {% endfor %}
+            {% if profile.attachments|length > 2 %}<small>+{{ profile.attachments|length - 2 }} more</small>{% endif %}
+          </div>
+        {% endif %}
+      </div>
+      <span>{% if profile.product_spool_path %}<a class="text-link" href="{{ profile.product_spool_path }}">{{ profile.product_spool_code }}</a>{% else %}Generic{% endif %}</span>
+      <span>{{ profile.printer_name or 'No printer' }}</span>
+      <span>{{ profile.nozzle_label or profile.nozzle_diameter ~ ' mm' }}</span>
+      <span>{% if profile.filament_used_g %}{{ '%.1f'|format(profile.filament_used_g) }} g{% else %}-{% endif %}</span>
+      <span>{{ profile.result_rating }}/5</span>
+      <span>{% if profile.attachments %}{{ profile.attachments|length }}{% else %}-{% endif %}</span>
+      <a class="text-link" href="{{ profile.edit_path }}">Edit</a>
+    </div>
+  {% else %}
+    <div class="empty-state">No saved print result yet. Add the first test after you choose an exact spool and printer.</div>
+  {% endfor %}
 </section>
 
 <section class="source-footnote anchored" id="source">
-  <strong>Data source / method:</strong> {{ material.source_notes }} Scores are comparative decision aids, not certified component design values.
+  <strong>Source and confidence:</strong> {{ material.source_notes }} Scores are comparative decision aids, not certified component design values.
   <div class="source-actions"><a class="button secondary" href="/materials/{{ material.slug }}/edit">Edit material data</a></div>
 </section>
 {% endif %}

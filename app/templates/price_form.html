@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Edit price - Material Lab{% endblock %}
+{% block content %}
+<section class="page-header">
+  <div>
+    <span class="eyebrow">PRICE RECORD</span>
+    <h1>Edit price</h1>
+    <p>{{ product.spool_code }} / {{ product.brand }} {{ product.product_name }}</p>
+  </div>
+  <a class="button secondary" href="{{ product.spool_path }}">Cancel</a>
+</section>
+
+<form class="material-form panel" action="/prices/{{ entry.id }}/edit" method="post">
+  <div class="panel-title"><span class="eyebrow">SUPPLIER PRICE</span><h2>Saved price entry</h2></div>
+  <section class="form-section">
+    <div class="form-grid">
+      <label>Spool price (&euro;)<input required type="number" min="0" step="0.01" name="price_eur" value="{{ entry.price_eur }}"></label>
+      <label>Date<input type="date" name="observed_on" value="{{ entry.observed_on.isoformat() }}"></label>
+      <label>Source<input name="source_label" value="{{ entry.source_label }}"></label>
+      <label>Stock note<input name="stock_note" value="{{ entry.stock_note }}"></label>
+    </div>
+  </section>
+  <div class="form-actions">
+    <a class="button secondary" href="{{ product.spool_path }}">Cancel</a>
+    <button class="button primary" type="submit">Save price</button>
+  </div>
+</form>
+
+<section class="danger-zone">
+  <div>
+    <strong>Delete price entry</strong>
+    <p>Deletes only this saved price record. The spool and print history remain.</p>
+  </div>
+  <form action="/prices/{{ entry.id }}/delete" method="post" class="inline-form" onsubmit="return confirm('Delete this price entry?');">
+    <button class="button secondary danger-button" type="submit">Delete price</button>
+  </form>
+</section>
+{% endblock %}

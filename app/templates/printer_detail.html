@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}{{ printer.name }} - Material Lab{% endblock %}
+{% block content %}
+<section class="record-header">
+  <div>
+    <a class="back-link" href="/printers">Back to printers</a>
+    <div class="record-kicker">
+      <span class="status-chip">{{ printer.printer_type }}</span>
+      {% if printer.is_active %}<span class="status-chip">Active</span>{% else %}<span class="status-chip muted">Archived</span>{% endif %}
+      {% if printer.enclosed %}<span class="status-chip">Enclosed</span>{% endif %}
+      {% if printer.ams_capable %}<span class="status-chip">Multi-spool</span>{% endif %}
+    </div>
+    <h1>
+      <span class="printer-symbol detail-symbol {% if printer.enclosed %}is-enclosed{% else %}is-open{% endif %}{% if printer.ams_capable %} has-ams{% endif %}{% if printer.direct_drive %} has-direct{% endif %}" aria-hidden="true">
+        <svg viewBox="0 0 24 24" focusable="false"><path d="M6 7h12v10H6z"/><path d="M9 4h6v3H9z"/><path d="M9 17h6v3H9z"/></svg>
+      </span>
+      {{ printer.name }}
+    </h1>
+    <p class="record-subtitle">{{ printer.description or printer.printer_type }}</p>
+  </div>
+  <div class="page-actions">
+    <a class="button primary" href="/printers/{{ printer.id }}/edit">Edit printer</a>
+    <a class="button secondary" href="/printers/{{ printer.id }}/nozzles/new">Add nozzle</a>
+    <a class="button secondary" href="/printers/{{ printer.id }}/maintenance/new">Add maintenance</a>
+    <a class="button secondary" href="/profiles/new">Add print result</a>
+    {% if printer.is_active %}
+      <form action="/printers/{{ printer.id }}/archive" method="post" class="inline-form"><button class="button secondary" type="submit">Archive</button></form>
+    {% else %}
+      <form action="/printers/{{ printer.id }}/restore" method="post" class="inline-form"><button class="button secondary" type="submit">Restore</button></form>
+    {% endif %}
+  </div>
+</section>
+
+<section class="summary-strip summary-strip--six">
+  <article><span>Max nozzle</span><strong>{{ printer.nozzle_max_c|int }} &deg;C</strong></article>
+  <article><span>Max bed</span><strong>{{ printer.bed_max_c|int }} &deg;C</strong></article>
+  <article><span>Max chamber</span><strong>{% if printer.chamber_max_c %}{{ printer.chamber_max_c|int }} &deg;C{% else %}-{% endif %}</strong></article>
+  <article><span>Installed nozzle</span><strong>{% if printer.installed_nozzle %}{{ printer.installed_nozzle.label }}{% else %}-{% endif %}</strong></article>
+  <article><span>Tracked print hours</span><strong>{{ printer.tracked_hours_label }}</strong></article>
+  <article><span>Last maintenance</span><strong>{{ printer.last_maintenance_date or '-' }}</strong></article>
+</section>
+
+<section class="detail-grid">
+  <article class="panel">
+    <div class="panel-title"><span class="eyebrow">SPECIFICATIONS</span><h2>Printer specifications</h2></div>
+    <dl class="info-list">
+      <div><dt>Type</dt><dd>{{ printer.printer_type }}</dd></div>
+      <div><dt>Build volume</dt><dd>{{ printer.build_volume or '-' }}</dd></div>
+      <div><dt>Serial / asset ID</dt><dd>{{ printer.serial_number or '-' }}</dd></div>
+      <div><dt>Purchase date</dt><dd>{{ printer.purchase_date or '-' }}</dd></div>
+      <div><dt>Enclosure</dt><dd>{% if printer.enclosed %}Yes{% else %}No{% endif %}</dd></div>
+      <div><dt>Heated chamber</dt><dd>{% if printer.heated_chamber %}Yes{% else %}No{% endif %}</dd></div>
+      <div><dt>Direct drive</dt><dd>{% if printer.direct_drive %}Yes{% else %}No{% endif %}</dd></div>
+      <div><dt>Flexible materials</dt><dd>{% if printer.supports_flexible %}Supported{% else %}Review needed{% endif %}</dd></div>
+      <div><dt>AMS / multi-spool</dt><dd>{% if printer.ams_capable %}Yes{% else %}No{% endif %}</dd></div>
+    </dl>
+  </article>
+
+  <article class="panel">
+    <div class="panel-title"><span class="eyebrow">NOTES</span><h2>Printer notes</h2></div>
+    <p class="body-copy">{{ printer.notes or 'No notes saved yet.' }}</p>
+  </article>
+</section>
+
+<section class="section-heading anchored" id="nozzles">
+  <div><span class="eyebrow">NOZZLES</span><h2>Installed and saved nozzles</h2></div>
+  <a class="button secondary" href="/printers/{{ printer.id }}/nozzles/new">Add nozzle</a>
+</section>
+<section class="panel table-panel">
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>Label</th><th>Diameter</th><th>Material</th><th>Installed</th><th>Tracked hours</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>
+        {% for nozzle in printer.nozzles %}
+          <tr>
+            <td><strong>{{ nozzle.label }}</strong>{% if nozzle.brand_product %}<br><small>{{ nozzle.brand_product }}</small>{% endif %}</td>
+            <td>{{ nozzle.diameter_mm }} mm</td>
+            <td>{{ nozzle.nozzle_material }}</td>
+            <td>{% if nozzle.installed %}Installed{% else %}-{% endif %}</td>
+            <td>{{ nozzle.tracked_hours_label }}</td>
+            <td>{% if nozzle.is_active %}Active{% else %}Retired{% endif %}</td>
+            <td>
+              <div class="table-actions">
+                <a class="text-link" href="/printers/{{ printer.id }}/nozzles/{{ nozzle.id }}/edit">Edit</a>
+                {% if nozzle.is_active %}
+                  <form action="/printers/{{ printer.id }}/nozzles/{{ nozzle.id }}/retire" method="post" class="inline-form"><button class="text-link" type="submit">Retire</button></form>
+                {% endif %}
+                {% if nozzle.print_count == 0 %}
+                  <form action="/printers/{{ printer.id }}/nozzles/{{ nozzle.id }}/delete" method="post" class="inline-form" onsubmit="return confirm('Delete this nozzle record?');"><button class="text-link danger-link" type="submit">Delete</button></form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="7" class="muted-cell">No nozzle records yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section-heading anchored" id="maintenance">
+  <div><span class="eyebrow">MAINTENANCE</span><h2>Maintenance / replaced parts history</h2></div>
+  <a class="button secondary" href="/printers/{{ printer.id }}/maintenance/new">Add maintenance entry</a>
+</section>
+<section class="panel table-panel">
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>Date</th><th>Type</th><th>Component</th><th>Notes</th><th>Cost</th><th>Printer hours</th><th>Actions</th></tr></thead>
+      <tbody>
+        {% for entry in printer.maintenance_entries %}
+          <tr>
+            <td>{{ entry.maintenance_date }}</td>
+            <td>{{ entry.maintenance_type }}</td>
+            <td>{{ entry.component or '-' }}</td>
+            <td>{{ entry.notes or '-' }}</td>
+            <td>{% if entry.cost_eur is not none %}&euro;{{ '%.2f'|format(entry.cost_eur) }}{% else %}-{% endif %}</td>
+            <td>{% if entry.printer_hours is not none %}{{ entry.printer_hours }} h{% else %}-{% endif %}</td>
+            <td>
+              <div class="table-actions">
+                <a class="text-link" href="/printers/{{ printer.id }}/maintenance/{{ entry.id }}/edit">Edit</a>
+                <form action="/printers/{{ printer.id }}/maintenance/{{ entry.id }}/delete" method="post" class="inline-form" onsubmit="return confirm('Delete this maintenance entry?');"><button class="text-link danger-link" type="submit">Delete</button></form>
+              </div>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="7" class="muted-cell">No maintenance entries saved yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section-heading anchored" id="prints">
+  <div><span class="eyebrow">PRINT RESULTS</span><h2>Recent print results</h2></div>
+</section>
+<section class="workshop-table print-log-table printer-print-log">
+  <div class="workshop-row workshop-row--head">
+    <span>Date</span><span>Print/test</span><span>Material</span><span>Spool</span><span>Nozzle</span><span>Duration</span><span>Used</span><span>Rating</span><span>Action</span>
+  </div>
+  {% for profile in profiles %}
+    <div class="workshop-row">
+      <span>{{ profile.printed_on }}</span>
+      <div><strong>{{ profile.profile_name }}</strong>{% if profile.notes %}<small>{{ profile.notes[:90] }}{% if profile.notes|length > 90 %}...{% endif %}</small>{% endif %}</div>
+      <a href="/materials/{{ profile.material_slug }}">{{ profile.material_name }}</a>
+      <span>{% if profile.product_spool_path %}<a class="text-link" href="{{ profile.product_spool_path }}">{{ profile.product_spool_code }}</a>{% else %}Generic{% endif %}</span>
+      <span>{{ profile.nozzle_label or profile.nozzle_diameter ~ ' mm' }}</span>
+      <span>{{ profile.print_duration_label }}</span>
+      <span>{% if profile.filament_used_g %}{{ '%.1f'|format(profile.filament_used_g) }} g{% else %}-{% endif %}</span>
+      <span>{{ profile.result_rating }}/5</span>
+      <a class="text-link" href="{{ profile.edit_path }}">Edit</a>
+    </div>
+  {% else %}
+    <div class="empty-state">No print results reference this printer yet.</div>
+  {% endfor %}
+</section>
+
+<section class="danger-zone">
+  <div>
+    <strong>Delete printer</strong>
+    <p>{% if printer.can_delete %}This printer has no nozzles, maintenance, or print history, so it can be deleted.{% else %}This printer has saved history. Archive it to preserve nozzles, maintenance, and print results.{% endif %}</p>
+  </div>
+  {% if printer.can_delete %}
+    <form action="/printers/{{ printer.id }}/delete" method="post" class="inline-form" onsubmit="return confirm('Delete this printer forever?');"><button class="button secondary danger-button" type="submit">Delete printer</button></form>
+  {% else %}
+    <form action="/printers/{{ printer.id }}/archive" method="post" class="inline-form"><button class="button secondary" type="submit">Archive printer</button></form>
+  {% endif %}
+</section>
+{% endblock %}

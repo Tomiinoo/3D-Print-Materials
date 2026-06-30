@@ -1,14 +1,18 @@
 {% extends "base.html" %}
-{% block title %}Material Lab — Library{% endblock %}
+{% block title %}Material Lab - Material Library{% endblock %}
 {% block content %}
-<section class="page-hero compact">
-  <div><span class="eyebrow">MATERIAL LIBRARY</span><h1>Find the right polymer before choosing a brand.</h1><p>Scores are comparative and editable. Exact manufacturer spools, prices and your test data sit inside each material.</p></div>
-  <a class="button primary" href="/materials/new">＋ Add material</a>
+<section class="page-header">
+  <div>
+    <span class="eyebrow">MATERIAL DATABASE</span>
+    <h1>Material Library</h1>
+    <p>Browse polymer families, print compatibility, and your tracked products.</p>
+  </div>
+  <a class="button primary" href="/materials/new">Add material</a>
 </section>
 
-<section class="filter-panel">
-  <label class="search-box"><span>⌕</span><input id="material-search" type="search" placeholder="Search PETG, nylon, CF, heat, outdoor…"></label>
-  <div class="filter-panel__hint">Search reads names, families, uses, process notes and compatibility tags.</div>
+<section class="filter-panel library-filter-panel">
+  <label class="search-box"><span>Search</span><input id="material-search" type="search" placeholder="PETG, nylon, CF, heat, outdoor..."></label>
+  <div class="filter-panel__hint">Search reads names, families, uses, process notes, and compatibility tags.</div>
   <div class="family-filters family-filters--primary" id="family-filters">
     {% for filter in filters %}
       {% if filter.key in ["all", "main-path", "aux-path", "ams-compatible", "group-elastomer", "group-polyamide", "group-high-temp", "group-filled", "group-support"] %}
@@ -28,38 +32,37 @@
   </details>
 </section>
 
-<section class="material-grid" id="material-grid">
+<section class="material-list" id="material-grid">
+  <div class="material-row material-row--head" aria-hidden="true">
+    <span>Material</span>
+    <span>Family</span>
+    <span>Modifier</span>
+    <span>Record type</span>
+    <span>Heat guide</span>
+    <span>Density</span>
+    <span>Moisture</span>
+    <span>Printer fit</span>
+    <span>Active spools</span>
+    <span>Action</span>
+  </div>
 {% for material in materials %}
-  <a class="material-card {% if material.is_catalog %}catalog-card{% endif %}" data-family="{{ material.family }}" data-filters="{{ (material.compatibility.filter_keys + material.filter_keys) | unique | join(' ') }}" data-search="{{ material.name }} {{ material.full_name }} {{ material.family }} {{ material.subfamily }} {{ material.best_for }} {{ material.avoid_for }} {{ material.description }} {{ material.search or '' }} {{ material.settings.recommended_nozzle }} {{ material.compatibility.filter_keys | join(' ') }} {{ material.filter_keys | join(' ') }}" href="/materials/{{ material.slug }}" style="--material-color: {{ material.family_color }}">
-    <div class="material-card-top">
-      <span class="family-pill">{{ material.family }}</span>
-      <span class="subfamily-pill {% if 'Carbon' in material.subfamily %}cf{% elif 'Glass' in material.subfamily %}gf{% endif %}">{{ material.subfamily }}</span>
-      {% if material.is_catalog %}<span class="subfamily-pill">Approximate catalog</span>{% endif %}
+  <a class="material-card material-row {% if material.is_catalog %}catalog-card{% endif %}" data-family="{{ material.family }}" data-filters="{{ (material.compatibility.filter_keys + material.filter_keys) | unique | join(' ') }}" data-search="{{ material.name }} {{ material.full_name }} {{ material.family }} {{ material.subfamily }} {{ material.best_for }} {{ material.avoid_for }} {{ material.description }} {{ material.search or '' }} {{ material.settings.recommended_nozzle }} {{ material.compatibility.filter_keys | join(' ') }} {{ material.filter_keys | join(' ') }}" href="/materials/{{ material.slug }}" style="--material-color: {{ material.family_color }}">
+    <div class="material-row__name">
+      <span class="material-dot"></span>
+      <div>
+        <strong>{{ material.name }}</strong>
+        <small>{{ material.full_name }}</small>
+      </div>
     </div>
-    <h3>{{ material.name }}</h3><p>{{ material.full_name }}</p>
-    <div class="status-row">
-      <span class="status-chip">{% if material.compatibility.direct_path %}DIRECT ✓{% else %}DIRECT —{% endif %}</span>
-      <span class="status-chip {% if not material.compatibility.aux_path %}warning{% endif %}">{% if material.compatibility.aux_path %}AUX ✓{% else %}AUX NO{% endif %}</span>
-      <span class="status-chip {% if not material.compatibility.ams %}warning{% endif %}">{% if material.compatibility.ams %}AMS ✓{% else %}AMS NO{% endif %}</span>
-      <span class="status-chip muted">{{ material.status if material.is_catalog else material.settings.recommended_nozzle }}</span>
-    </div>
-    <div class="micro-stats">
-      {% if material.is_catalog %}
-        <span><small>HDT</small><b>{{ material.real_properties.hdt_c.label or '—' }}</b></span>
-        <span><small>Density</small><b>{{ material.real_properties.density_g_cm3.label or '—' }}</b></span>
-        <span><small>Tensile</small><b>{{ material.real_properties.tensile_mpa.label or '—' }}</b></span>
-      {% else %}
-        <span><small>HDT</small><b>{% if material.properties.hdt_c %}{{ material.properties.hdt_c }} °C{% else %}—{% endif %}</b></span>
-        <span><small>Density</small><b>{{ '%.2f'|format(material.properties.density_g_cm3) }}</b></span>
-        <span><small>Moisture</small><b>{{ material.properties.moisture_sensitivity }}/10</b></span>
-      {% endif %}
-    </div>
-    <div class="score-pair">
-      <div><span>XY rigidity</span><i><em style="width: {{ material.scores.dry.rigidity_xy * 10 }}%"></em></i></div>
-      <div><span>Impact</span><i><em style="width: {{ material.scores.dry.impact_resistance * 10 }}%"></em></i></div>
-      <div><span>Layer bond</span><i><em style="width: {{ material.scores.dry.layer_adhesion * 10 }}%"></em></i></div>
-    </div>
-    <div class="card-footer"><span>{{ material.best_for }}</span><strong>→</strong></div>
+    <span>{{ material.family }}</span>
+    <span>{{ material.subfamily }}</span>
+    <span>{% if material.is_catalog %}Catalogue reference{% else %}Editable material{% endif %}</span>
+    <span>{% if material.is_catalog %}{{ material.real_properties.hdt_c.label or '-' }}{% elif material.properties.hdt_c %}{{ material.properties.hdt_c }} &deg;C{% else %}-{% endif %}</span>
+    <span>{% if material.is_catalog %}{{ material.real_properties.density_g_cm3.label or '-' }}{% else %}{{ '%.2f'|format(material.properties.density_g_cm3) }} g/cm3{% endif %}</span>
+    <span>{{ material.properties.moisture_sensitivity or material.real_properties.moisture_sensitivity.label or '-' }}</span>
+    <span>{% if material.compatibility.direct_path %}Direct OK{% else %}Review path{% endif %}</span>
+    <span>{% if material.product_count %}{{ material.product_count }} active spool{% if material.product_count != 1 %}s{% endif %}{% else %}No active spool{% endif %}</span>
+    <strong class="row-open">Open</strong>
   </a>
 {% endfor %}
 </section>

@@ -9,11 +9,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 
-_DATA_DIR = tempfile.TemporaryDirectory()
+_DATA_DIR = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
 os.environ["MATERIAL_LAB_DATA_DIR"] = _DATA_DIR.name
 
 from app.database import Base  # noqa: E402
-from app.main import api_calculate, parse_form_date, product_filament_usage  # noqa: E402
+from app.main import api_calculate, engineering_reference_rows, parse_form_date, product_filament_usage  # noqa: E402
 from app.models import FilamentProduct, Material, PriceEntry, PrintProfile  # noqa: E402
 
 
@@ -57,6 +57,17 @@ class InventoryCalculatorTest(unittest.TestCase):
         self.assertEqual(result["material_cost_eur"], 2.29)
         self.assertEqual(result["energy_cost_eur"], 0.15)
         self.assertEqual(result["total_cost_eur"], 2.44)
+
+    def test_engineering_reference_rows_display_int_and_float_scores(self) -> None:
+        rows = engineering_reference_rows(
+            properties={"modulus_gpa": "2.1", "tensile_mpa": "50"},
+            settings={},
+            scores={"dry": {"rigidity_xy": 10, "strength_xy": 7.5}},
+        )
+        by_key = {row["key"]: row for row in rows}
+
+        self.assertEqual(by_key["rigidity_xy"]["score"], 10)
+        self.assertEqual(by_key["strength_xy"]["score"], 7.5)
 
     def _create_product(self, session):
         material = Material(

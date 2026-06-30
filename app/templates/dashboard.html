@@ -1,59 +1,113 @@
 {% extends "base.html" %}
-{% block title %}Material Lab — Dashboard{% endblock %}
+{% block title %}Material Lab - Dashboard{% endblock %}
 {% block content %}
-<section class="hero dashboard-hero">
+<section class="page-header">
   <div>
-    <span class="eyebrow">MATERIAL SYSTEM</span>
-    <h1>Make a material choice like an engineer.</h1>
-    <p>Compare the polymer first. Then use your own spool price, drying history, nozzle and actual print results—not guesses.</p>
-    <div class="hero-actions">
-      <a class="button primary" href="/materials">Browse all materials <span>→</span></a>
-      <a class="button secondary" href="/compare">Open comparison lab</a>
-    </div>
+    <span class="eyebrow">WORKSHOP</span>
+    <h1>Dashboard</h1>
+    <p>Current spools, recent prints, and material activity.</p>
   </div>
-  <div class="hero-orbit" aria-hidden="true">
-    <div class="orbit-core">LAB<br><small>materials / spools / tests</small></div>
-    <span class="orb orb-a"></span><span class="orb orb-b"></span><span class="orb orb-c"></span>
+  <div class="page-actions">
+    <a class="button primary" href="/materials">Add spool</a>
+    <a class="button secondary" href="/profiles/new">Add print result</a>
+    <a class="button secondary" href="/calculator">Open calculator</a>
   </div>
 </section>
 
-<section class="metric-grid">
-  <article class="metric-card"><span>Material profiles</span><strong>{{ stats.materials }}</strong><small>Seeded and editable</small></article>
-  <article class="metric-card"><span>Your exact spools</span><strong>{{ stats.products }}</strong><small>With price history</small></article>
-  <article class="metric-card"><span>Saved print tests</span><strong>{{ stats.tested_profiles }}</strong><small>Real nozzle / bed / chamber results</small></article>
-  <article class="metric-card"><span>Material families</span><strong>{{ stats.families }}</strong><small>Colour-coded in the library</small></article>
+<section class="summary-strip" aria-label="Workshop summary">
+  <article><span>Active spools</span><strong>{{ stats.products }}</strong></article>
+  <article><span>Remaining filament</span><strong>{{ '%.0f'|format(stats.remaining_g) }} g</strong></article>
+  <article><span>Low stock</span><strong>{{ stats.low_stock }}</strong></article>
+  <article><span>Print results</span><strong>{{ stats.tested_profiles }}</strong></article>
+  <article><span>Owned materials</span><strong>{{ stats.owned_materials }}</strong></article>
+</section>
+
+{% if attention_items %}
+<section class="section-heading">
+  <div>
+    <span class="eyebrow">NEEDS ATTENTION</span>
+    <h2>Review before the next print</h2>
+  </div>
+</section>
+<section class="attention-list">
+  {% for item in attention_items %}
+    <a class="attention-row attention-row--{{ item.tone or 'warning' }}" href="{{ item.href }}">
+      <span>{{ item.kind }}</span>
+      <strong>{{ item.text }}</strong>
+    </a>
+  {% endfor %}
+</section>
+{% endif %}
+
+<section class="section-heading">
+  <div>
+    <span class="eyebrow">ACTIVE SPOOLS</span>
+    <h2>Physical inventory</h2>
+  </div>
+  <a class="text-link" href="/inventory">View all spools</a>
+</section>
+<section class="workshop-table">
+  <div class="workshop-row workshop-row--head">
+    <span>Spool</span><span>Material / product</span><span>Remaining</span><span>Price</span><span>Last used</span><span>Action</span>
+  </div>
+  {% for product in products %}
+    <div class="workshop-row">
+      <a class="spool-code-link" href="{{ product.spool_path }}">{{ product.spool_code }}</a>
+      <div>
+        <strong>{{ product.material_name }} - {{ product.brand }} {{ product.product_name }}</strong>
+        <small>{{ product.color_name or 'No colour saved' }}{% if product.supplier %} / {{ product.supplier }}{% endif %}</small>
+      </div>
+      <div>
+        <strong>{{ '%.1f'|format(product.remaining_g) }} / {{ product.spool_weight_g|int }} g</strong>
+        <div class="spool-usage"><span style="width: {{ product.remaining_percent }}%"></span></div>
+      </div>
+      <span>{% if product.price_per_kg %}&euro;{{ '%.2f'|format(product.price_per_kg) }}/kg{% else %}No price{% endif %}</span>
+      <span>{{ product.last_printed_on or 'Not yet used' }}</span>
+      <a class="button small secondary" href="{{ product.spool_path }}">Inspect</a>
+    </div>
+  {% else %}
+    <div class="empty-state">No active spools yet. Add the first spool from the Material Library.</div>
+  {% endfor %}
 </section>
 
 <section class="section-heading">
-  <div><span class="eyebrow">MATERIAL LIBRARY</span><h2>Every printable material, one decision view.</h2></div>
-  <a class="text-link" href="/materials">Full library →</a>
+  <div>
+    <span class="eyebrow">RECENT PRINT RESULTS</span>
+    <h2>Latest workshop log entries</h2>
+  </div>
+  <a class="text-link" href="/inventory#profiles">Open print history</a>
+</section>
+<section class="workshop-table print-log-table">
+  <div class="workshop-row workshop-row--head">
+    <span>Date</span><span>Print result</span><span>Spool</span><span>Printer</span><span>Used</span><span>Rating</span><span>Action</span>
+  </div>
+  {% for profile in recent_profiles %}
+    <div class="workshop-row">
+      <span>{{ profile.printed_on }}</span>
+      <div>
+        <strong>{{ profile.profile_name }}</strong>
+        {% if profile.notes %}<small>{{ profile.notes[:90] }}{% if profile.notes|length > 90 %}...{% endif %}</small>{% endif %}
+      </div>
+      <span>{% if profile.product_spool_path %}<a class="text-link" href="{{ profile.product_spool_path }}">{{ profile.product_spool_code }}</a>{% else %}Generic{% endif %}</span>
+      <span>{{ profile.printer_name or 'No printer' }}</span>
+      <span>{% if profile.filament_used_g %}{{ '%.1f'|format(profile.filament_used_g) }} g{% else %}-{% endif %}</span>
+      <span>{{ profile.result_rating }}/5</span>
+      <a class="text-link" href="{{ profile.edit_path }}">Edit</a>
+    </div>
+  {% else %}
+    <div class="empty-state">No print results logged yet.</div>
+  {% endfor %}
 </section>
 
-<section class="material-grid dashboard-grid">
-{% for material in materials %}
-  <a class="material-card" href="/materials/{{ material.slug }}" style="--material-color: {{ material.family_color }}">
-    <div class="material-card-top">
-      <span class="family-pill">{{ material.family }}</span>
-      <span class="subfamily-pill {% if 'Carbon' in material.subfamily %}cf{% elif 'Glass' in material.subfamily %}gf{% endif %}">{{ material.subfamily }}</span>
-    </div>
-    <h3>{{ material.name }}</h3>
-    <p>{{ material.full_name }}</p>
-    <div class="micro-stats">
-      <span><small>HDT</small><b>{% if material.properties.hdt_c %}{{ material.properties.hdt_c }} °C{% else %}—{% endif %}</b></span>
-      <span><small>Density</small><b>{{ '%.2f'|format(material.properties.density_g_cm3) }}</b></span>
-      <span><small>Water</small><b>{{ material.properties.water_resistance }}/10</b></span>
-    </div>
-    <div class="score-pair">
-      <div><span>Rigidity</span><i><em style="width: {{ material.scores.dry.rigidity_xy * 10 }}%"></em></i></div>
-      <div><span>Impact</span><i><em style="width: {{ material.scores.dry.impact_resistance * 10 }}%"></em></i></div>
-    </div>
-    <div class="card-footer"><span>{{ material.properties.continuous_service_c or '—' }} °C continuous guide</span><strong>Open →</strong></div>
-  </a>
-{% endfor %}
+<section class="section-heading">
+  <div>
+    <span class="eyebrow">MATERIAL DATABASE</span>
+    <h2>Reference tools</h2>
+  </div>
 </section>
-
-<section class="two-col-callouts">
-  <article class="guide-card purple"><span class="eyebrow">FAST PATH</span><h3>Unsure where to begin?</h3><p>Use the material guide to rank polymers by the actual job: outdoor, heat, impact, stiffness, flexible, chemical exposure or cost.</p><a href="/materials">Choose by job →</a></article>
-  <article class="guide-card teal"><span class="eyebrow">YOUR DATA</span><h3>Stop losing good settings.</h3><p>Log the actual spool, dryer, chamber, nozzle and result. The next print starts from your proven settings instead of internet averages.</p><a href="/inventory">Open inventory & tests →</a></article>
+<section class="quick-entry-grid">
+  <a class="quick-entry" href="/materials"><strong>Material Library</strong><span>Browse polymer families, properties, and owned spools.</span></a>
+  <a class="quick-entry" href="/guide"><strong>Material Guide</strong><span>Rank materials from practical requirements.</span></a>
+  <a class="quick-entry" href="/compare"><strong>Compare Materials</strong><span>Compare real values first, charts second.</span></a>
 </section>
 {% endblock %}

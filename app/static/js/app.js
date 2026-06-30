@@ -39,6 +39,35 @@
   clearOptOutDateDefaults();
   window.addEventListener('pageshow', () => clearOptOutDateDefaults());
 
+  const wireNozzleFilters = () => {
+    document.querySelectorAll('[data-printer-select]').forEach((printerSelect) => {
+      const form = printerSelect.closest('form') || document;
+      const nozzleSelect = form.querySelector('[data-nozzle-select]');
+      if (!nozzleSelect) return;
+
+      const updateNozzles = () => {
+        const printerId = printerSelect.value;
+        [...nozzleSelect.options].forEach((option) => {
+          if (!option.value) {
+            option.hidden = false;
+            return;
+          }
+          option.hidden = Boolean(printerId) && option.dataset.printerId !== printerId;
+        });
+
+        const selected = nozzleSelect.selectedOptions[0];
+        if (selected?.hidden) {
+          nozzleSelect.value = '';
+        }
+      };
+
+      printerSelect.addEventListener('change', updateNozzles);
+      updateNozzles();
+    });
+  };
+
+  wireNozzleFilters();
+
   const search = document.getElementById('material-search');
   const cards = [...document.querySelectorAll('#material-grid .material-card, #catalog-grid .material-card')];
   const empty = document.getElementById('material-empty');

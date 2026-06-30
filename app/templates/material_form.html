@@ -4,18 +4,18 @@
 {% set is_edit = mode == 'edit' %}
 {% set settings = material.settings %}
 {% set properties = material.properties %}
-<section class="page-hero compact">
+<section class="page-header">
   <div>
-    <span class="eyebrow">MATERIAL STUDIO</span>
-    <h1>{% if is_edit %}Edit {{ material.name }}.{% else %}Add a material without touching JSON.{% endif %}</h1>
-    <p>Use the normal fields for everyday edits. The advanced JSON is still there for unusual properties and power-user cleanup.</p>
+    <span class="eyebrow">MATERIAL RECORD</span>
+    <h1>{% if is_edit %}Edit {{ material.name }}{% else %}Add material{% endif %}</h1>
+    <p>Maintain print settings, engineering values, source notes, and compatibility fields.</p>
   </div>
 </section>
 
 <form class="material-form panel" action="{% if is_edit %}/materials/{{ material.slug }}/edit{% else %}/materials/new{% endif %}" method="post">
   <div class="panel-title">
     <span class="eyebrow">1. IDENTITY</span>
-    <h2>What material is this?</h2>
+    <h2>Identity</h2>
   </div>
   <div class="form-grid">
     <label>Short material name<input required name="name" value="{{ material.name }}" placeholder="Example: PPS-CF"></label>
@@ -72,7 +72,7 @@
 
   <div class="panel-title spaced">
     <span class="eyebrow">4. SOURCE</span>
-    <h2>Where did the values come from?</h2>
+    <h2>Source notes</h2>
   </div>
   <label>Source / TDS notes<textarea name="source_notes" placeholder="Manufacturer TDS, product URL, test standard, condition, caveats">{{ material.source_notes }}</textarea></label>
 

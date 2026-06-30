@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}{% if mode == 'create' %}Add printer{% else %}Edit printer{% endif %} - Material Lab{% endblock %}
+{% block content %}
+<section class="page-header">
+  <div>
+    <span class="eyebrow">PRINTER</span>
+    <h1>{% if mode == 'create' %}Add printer{% else %}Edit printer{% endif %}</h1>
+    <p>Store the real hardware limits used for material and nozzle decisions.</p>
+  </div>
+  <a class="button secondary" href="{% if mode == 'create' %}/printers{% else %}/printers/{{ printer.id }}{% endif %}">Cancel</a>
+</section>
+
+<form class="material-form panel" action="{% if mode == 'create' %}/printers/new{% else %}/printers/{{ printer.id }}/edit{% endif %}" method="post">
+  <div class="panel-title"><span class="eyebrow">PRINTER RECORD</span><h2>Specifications and status</h2></div>
+
+  <section class="form-section">
+    <h3>A. Identity</h3>
+    <div class="form-grid">
+      <label>Printer name<input required name="name" value="{{ printer.name }}"></label>
+      <label>Printer type/category<input name="printer_type" value="{{ printer.printer_type }}" placeholder="FDM / FFF"></label>
+      <label class="span-all">Brand/model or description<input name="description" value="{{ printer.description }}" placeholder="Bambu A1 mini, AnkerMake M5C, custom Voron..."></label>
+      <label>Build volume<input name="build_volume" value="{{ printer.build_volume }}" placeholder="256 x 256 x 256 mm"></label>
+      <label>Purchase date<input type="date" name="purchase_date" value="{{ printer.purchase_date }}"></label>
+      <label>Serial / asset ID<input name="serial_number" value="{{ printer.serial_number }}"></label>
+      <label>Hours before tracking<input type="number" min="0" step="0.1" name="hours_before_tracking" value="{{ printer.hours_before_tracking }}"></label>
+    </div>
+  </section>
+
+  <section class="form-section">
+    <h3>B. Thermal / hardware limits</h3>
+    <div class="form-grid">
+      <label>Maximum nozzle temperature (&deg;C)<input required type="number" min="0" step="1" name="nozzle_max_c" value="{{ printer.nozzle_max_c }}"></label>
+      <label>Maximum bed temperature (&deg;C)<input required type="number" min="0" step="1" name="bed_max_c" value="{{ printer.bed_max_c }}"></label>
+      <label>Maximum chamber temperature (&deg;C)<input required type="number" min="0" step="1" name="chamber_max_c" value="{{ printer.chamber_max_c }}"></label>
+    </div>
+  </section>
+
+  <section class="form-section">
+    <h3>C. Feed and enclosure capabilities</h3>
+    <div class="form-grid">
+      <label class="check-label"><input type="checkbox" name="enclosed" {% if printer.enclosed %}checked{% endif %}> Has enclosure</label>
+      <label class="check-label"><input type="checkbox" name="heated_chamber" {% if printer.heated_chamber %}checked{% endif %}> Actively heated chamber</label>
+      <label class="check-label"><input type="checkbox" name="direct_drive" {% if printer.direct_drive %}checked{% endif %}> Direct-drive capable</label>
+      <label class="check-label"><input type="checkbox" name="supports_flexible" {% if printer.supports_flexible %}checked{% endif %}> Flexible-material capable</label>
+      <label class="check-label"><input type="checkbox" name="ams_capable" {% if printer.ams_capable %}checked{% endif %}> AMS / multi-spool capable</label>
+    </div>
+  </section>
+
+  <section class="form-section">
+    <h3>D. Notes / status</h3>
+    <div class="form-grid">
+      <label class="span-all">Notes<textarea name="notes" placeholder="Known limits, enclosure notes, feed path quirks">{{ printer.notes }}</textarea></label>
+      <label class="check-label"><input type="checkbox" name="is_active" {% if printer.is_active %}checked{% endif %}> Active printer</label>
+    </div>
+  </section>
+
+  <div class="form-actions">
+    <a class="button secondary" href="{% if mode == 'create' %}/printers{% else %}/printers/{{ printer.id }}{% endif %}">Cancel</a>
+    <button class="button primary" type="submit">{% if mode == 'create' %}Save printer{% else %}Save changes{% endif %}</button>
+  </div>
+</form>
+{% endblock %}

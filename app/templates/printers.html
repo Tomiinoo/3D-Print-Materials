@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Printers - Material Lab{% endblock %}
+{% block content %}
+<section class="page-header">
+  <div>
+    <span class="eyebrow">WORKSHOP</span>
+    <h1>Printers</h1>
+    <p>Saved printer limits, nozzles, maintenance, and print history.</p>
+  </div>
+  <a class="button primary" href="/printers/new">Add printer</a>
+</section>
+
+<section class="panel table-panel">
+  <div class="panel-title"><span class="eyebrow">ACTIVE PRINTERS</span><h2>Printer fleet</h2></div>
+  <div class="table-scroll">
+    <table class="printer-table">
+      <thead>
+        <tr>
+          <th>Printer</th>
+          <th>Model / notes</th>
+          <th>Nozzles</th>
+          <th>Installed</th>
+          <th>Max nozzle</th>
+          <th>Max bed</th>
+          <th>Max chamber</th>
+          <th>Enclosure</th>
+          <th>Prints</th>
+          <th>Maintenance</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for printer in printers %}
+          <tr>
+            <td>
+              <span class="printer-name-cell">
+                <span class="printer-symbol {% if printer.enclosed %}is-enclosed{% else %}is-open{% endif %}{% if printer.ams_capable %} has-ams{% endif %}{% if printer.direct_drive %} has-direct{% endif %}" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false"><path d="M6 7h12v10H6z"/><path d="M9 4h6v3H9z"/><path d="M9 17h6v3H9z"/></svg>
+                </span>
+                <strong>{{ printer.name }}</strong>
+              </span>
+            </td>
+            <td><span>{{ printer.description or printer.printer_type }}</span>{% if printer.notes %}<small>{{ printer.notes[:70] }}{% if printer.notes|length > 70 %}...{% endif %}</small>{% endif %}</td>
+            <td>{{ printer.nozzle_count }}</td>
+            <td>{% if printer.installed_nozzle %}{{ printer.installed_nozzle.label }}{% else %}-{% endif %}</td>
+            <td>{{ printer.nozzle_max_c|int }} &deg;C</td>
+            <td>{{ printer.bed_max_c|int }} &deg;C</td>
+            <td>{% if printer.chamber_max_c %}{{ printer.chamber_max_c|int }} &deg;C{% else %}-{% endif %}</td>
+            <td>{% if printer.enclosed %}Enclosed{% else %}Open frame{% endif %}{% if printer.heated_chamber %}<br><small>heated</small>{% endif %}</td>
+            <td>{{ printer.print_count }}</td>
+            <td>{{ printer.last_maintenance_date or '-' }}</td>
+            <td>
+              <div class="table-actions">
+                <a class="text-link" href="/printers/{{ printer.id }}">Inspect</a>
+                <a class="text-link" href="/printers/{{ printer.id }}/edit">Edit</a>
+                <form action="/printers/{{ printer.id }}/archive" method="post" class="inline-form">
+                  <input type="hidden" name="return_to" value="/printers">
+                  <button class="text-link" type="submit">Archive</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="11" class="muted-cell">No active printers saved yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="section-heading anchored" id="archived">
+  <div><span class="eyebrow">ARCHIVED PRINTERS</span><h2>Hidden from active print forms</h2></div>
+</section>
+<section class="panel table-panel">
+  <div class="table-scroll">
+    <table>
+      <thead><tr><th>Printer</th><th>Prints</th><th>Nozzles</th><th>Last maintenance</th><th>Actions</th></tr></thead>
+      <tbody>
+        {% for printer in archived_printers %}
+          <tr>
+            <td><strong>{{ printer.name }}</strong><br><small>{{ printer.description or printer.printer_type }}</small></td>
+            <td>{{ printer.print_count }}</td>
+            <td>{{ printer.nozzle_count }}</td>
+            <td>{{ printer.last_maintenance_date or '-' }}</td>
+            <td>
+              <div class="table-actions">
+                <a class="text-link" href="/printers/{{ printer.id }}">Inspect</a>
+                <a class="text-link" href="/printers/{{ printer.id }}/edit">Edit</a>
+                <form action="/printers/{{ printer.id }}/restore" method="post" class="inline-form">
+                  <input type="hidden" name="return_to" value="/printers#archived">
+                  <button class="text-link" type="submit">Restore</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="5" class="muted-cell">No archived printers.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

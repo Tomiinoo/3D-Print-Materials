@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}{% if mode == 'create' %}Add nozzle{% else %}Edit nozzle{% endif %} - Material Lab{% endblock %}
+{% block content %}
+<section class="page-header">
+  <div>
+    <span class="eyebrow">NOZZLE</span>
+    <h1>{% if mode == 'create' %}Add nozzle{% else %}Edit nozzle{% endif %}</h1>
+    <p>{{ printer.name }}</p>
+  </div>
+  <a class="button secondary" href="/printers/{{ printer.id }}#nozzles">Cancel</a>
+</section>
+
+<form class="material-form panel" action="{% if mode == 'create' %}/printers/{{ printer.id }}/nozzles/new{% else %}/printers/{{ printer.id }}/nozzles/{{ nozzle.id }}/edit{% endif %}" method="post">
+  <div class="panel-title"><span class="eyebrow">NOZZLE RECORD</span><h2>Hardware and tracking</h2></div>
+  <section class="form-section">
+    <div class="form-grid">
+      <label class="span-all">User label<input required name="label" value="{{ nozzle.label }}" placeholder="0.4 mm hardened steel"></label>
+      <label>Diameter in mm<input required type="number" min="0.1" step="0.01" name="diameter_mm" value="{{ nozzle.diameter_mm }}"></label>
+      <label>Nozzle material
+        <select name="nozzle_material">
+          {% for option in nozzle_material_options %}
+            <option value="{{ option }}" {% if nozzle.nozzle_material == option %}selected{% endif %}>{{ option }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Brand / product<input name="brand_product" value="{{ nozzle.brand_product }}" placeholder="E3D ObXidian, stock brass..."></label>
+      <label>Purchase/install date<input type="date" name="installed_on" value="{{ nozzle.installed_on }}"></label>
+      <label>Hours before tracking<input type="number" min="0" step="0.1" name="hours_before_tracking" value="{{ nozzle.hours_before_tracking }}"></label>
+      <label class="check-label"><input type="checkbox" name="installed" {% if nozzle.installed %}checked{% endif %}> Currently installed</label>
+      <label class="check-label"><input type="checkbox" name="is_active" {% if nozzle.is_active %}checked{% endif %}> Active / selectable</label>
+      <label class="span-all">Notes<textarea name="notes">{{ nozzle.notes }}</textarea></label>
+    </div>
+  </section>
+  <div class="form-actions">
+    <a class="button secondary" href="/printers/{{ printer.id }}#nozzles">Cancel</a>
+    <button class="button primary" type="submit">{% if mode == 'create' %}Save nozzle{% else %}Save nozzle{% endif %}</button>
+  </div>
+</form>
+{% endblock %}

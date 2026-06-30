@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 import subprocess
+import sys
 
 from .database import DB_PATH
 
@@ -9,7 +10,7 @@ from .database import DB_PATH
 BASELINE_REVISION = "bee771ab1c79"
 ENGINEERING_CORE_REVISION = "5c97e2fd405e"
 SPOOL_REVISION = "8a7c4d9f2b31"
-HEAD_REVISION = "9c1d2e3f4a5b"
+PRINTER_PROFILE_REVISION = "9c1d2e3f4a5b"
 
 CORE_TABLES = {
     "materials",
@@ -63,7 +64,7 @@ def revision_for_untracked_schema(
     )
 
     if has_v2_schema and has_spool_schema and has_printer_schema:
-        return HEAD_REVISION
+        return PRINTER_PROFILE_REVISION
     if has_v2_schema and has_spool_schema:
         return SPOOL_REVISION
     if has_v2_schema:
@@ -105,7 +106,7 @@ def main() -> None:
         "Material Lab: existing database has Material Lab tables but no Alembic "
         f"revision; stamping {revision} before upgrade."
     )
-    subprocess.run(["alembic", "stamp", revision], check=True)
+    subprocess.run([sys.executable, "-m", "alembic", "stamp", revision], check=True)
 
 
 if __name__ == "__main__":

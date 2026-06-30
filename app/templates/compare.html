@@ -1,12 +1,16 @@
 {% extends "base.html" %}
-{% block title %}Material Lab — Compare{% endblock %}
+{% block title %}Material Lab - Compare Materials{% endblock %}
 {% block content %}
-<section class="page-hero compact">
-  <div><span class="eyebrow">COMPARISON LAB</span><h1>Compare the polymer state, not just the product label.</h1><p>Switch between dry and moisture-conditioned behaviour. Use this to narrow a material shortlist; use the exact filament TDS for final design choices.</p></div>
+<section class="page-header">
+  <div>
+    <span class="eyebrow">MATERIAL DATABASE</span>
+    <h1>Compare Materials</h1>
+    <p>Compare selected material families and exact products using real values and orientation scores.</p>
+  </div>
 </section>
 
 <section class="compare-controls panel">
-  <div class="control-title"><span class="eyebrow">1. SELECT MATERIALS</span><h2>Choose up to six for a readable graph.</h2></div>
+  <div class="control-title"><span class="eyebrow">SELECTION</span><h2>Choose up to six materials</h2></div>
   <label class="state-select">State
     <select id="compare-state"><option value="dry">Dry / freshly dried</option><option value="wet">Moisture-conditioned / wet</option></select>
   </label>
@@ -20,12 +24,12 @@
         {% endfor %}
       </optgroup>
       <optgroup label="Real values">
-        <option value="real:price_per_kg">Current price (€/kg)</option>
+        <option value="real:price_per_kg">Current price (&euro;/kg)</option>
         <option value="real:tensile_mpa">Tensile strength (MPa)</option>
         <option value="real:modulus_gpa">Tensile modulus (GPa)</option>
-        <option value="real:hdt_c">HDT (°C)</option>
-        <option value="real:continuous_service_c">Continuous service (°C)</option>
-        <option value="real:density_g_cm3">Density (g/cm³)</option>
+        <option value="real:hdt_c">HDT (&deg;C)</option>
+        <option value="real:continuous_service_c">Continuous service (&deg;C)</option>
+        <option value="real:density_g_cm3">Density (g/cm3)</option>
       </optgroup>
     </select>
   </label>
@@ -37,7 +41,7 @@
       <option value="score:heat_resistance">Heat resistance score</option>
       <option value="real:tensile_mpa">Tensile strength (MPa)</option>
       <option value="real:modulus_gpa">Tensile modulus (GPa)</option>
-      <option value="real:price_per_kg">Current price (€/kg)</option>
+      <option value="real:price_per_kg">Current price (&euro;/kg)</option>
     </select>
   </label>
   <label class="state-select">Map Y
@@ -46,28 +50,31 @@
       <option value="score:impact_resistance">Impact resistance score</option>
       <option value="score:strength_xy">XY strength score</option>
       <option value="score:layer_adhesion">Layer bond score</option>
-      <option value="real:hdt_c">HDT (°C)</option>
-      <option value="real:continuous_service_c">Continuous service (°C)</option>
+      <option value="real:hdt_c">HDT (&deg;C)</option>
+      <option value="real:continuous_service_c">Continuous service (&deg;C)</option>
       <option value="real:tensile_mpa">Tensile strength (MPa)</option>
     </select>
   </label>
   <div class="compare-family-picker" id="compare-family-picker"></div>
   <div class="compare-selection-tools">
-    <label class="search-box compare-search"><span>⌕</span><input id="compare-material-search" type="search" placeholder="Search inside selected family..."></label>
+    <label class="search-box compare-search"><span>Search</span><input id="compare-material-search" type="search" placeholder="Search inside selected family..."></label>
     <span id="compare-selected-count"></span>
     <button class="button small secondary" type="button" id="compare-clear">Clear</button>
   </div>
   <div class="compare-picker" id="compare-picker"></div>
 </section>
 
-<section class="comparison-grid">
-  <article class="panel chart-panel"><div class="panel-title"><span class="eyebrow">MULTI-AXIS</span><h2>Engineering profile</h2></div><div id="radar-chart" class="chart-slot"></div></article>
-  <article class="panel chart-panel"><div class="panel-title"><span class="eyebrow">SELECTED PROPERTY</span><h2 id="bar-chart-title">Score comparison</h2></div><div id="bar-chart" class="chart-slot"></div></article>
+<section class="panel compare-table-wrap">
+  <div class="panel-title"><span class="eyebrow">NUMERIC REFERENCE</span><h2>Selected materials</h2><p>Unknown values stay blank; scores are comparative orientation values.</p></div>
+  <div class="table-scroll"><table id="compare-table"><thead><tr><th>Material</th><th>State</th><th>Density</th><th>HDT</th><th>Continuous</th><th>Tensile</th><th>Modulus</th><th>Strength score</th><th>Impact score</th><th>Current price</th></tr></thead><tbody></tbody></table></div>
 </section>
 
-<section class="panel chart-panel full-chart"><div class="panel-title"><span class="eyebrow">TRADE-OFF MAP</span><h2 id="scatter-chart-title">Heat resistance vs impact resistance</h2><p id="scatter-chart-note">Choose any two score or real-value properties. Scores are 0-10; real values use the best available prototype/reference value.</p></div><div id="scatter-chart" class="chart-slot scatter-slot"></div></section>
+<section class="comparison-grid">
+  <article class="panel chart-panel"><div class="panel-title"><span class="eyebrow">SELECTED PROPERTY</span><h2 id="bar-chart-title">Score comparison</h2></div><div id="bar-chart" class="chart-slot"></div></article>
+  <article class="panel chart-panel"><div class="panel-title"><span class="eyebrow">TRADE-OFF MAP</span><h2 id="scatter-chart-title">Heat resistance vs impact resistance</h2><p id="scatter-chart-note">Scores are 0-10; real values use the best stored reference value.</p></div><div id="scatter-chart" class="chart-slot scatter-slot"></div></article>
+</section>
 
-<section class="panel compare-table-wrap"><div class="panel-title"><span class="eyebrow">NUMERIC REFERENCE</span><h2>Selected materials</h2></div><div class="table-scroll"><table id="compare-table"><thead><tr><th>Material</th><th>State</th><th>Density</th><th>HDT</th><th>Continuous</th><th>Tensile</th><th>Modulus</th><th>Strength score</th><th>Impact score</th><th>Current price</th></tr></thead><tbody></tbody></table></div></section>
+<section class="panel chart-panel full-chart"><div class="panel-title"><span class="eyebrow">MULTI-AXIS PROFILE</span><h2>Radar chart</h2></div><div id="radar-chart" class="chart-slot"></div></section>
 
 <script id="compare-material-data" type="application/json">{{ materials | tojson }}</script>
 {% endblock %}

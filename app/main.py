@@ -4,13 +4,15 @@ import json
 import re
 import shutil
 import sqlite3
+import uuid
 from contextlib import asynccontextmanager
 from datetime import date, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 from urllib.parse import quote
 
-from fastapi import Depends, FastAPI, Form, HTTPException, Request
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -19,11 +21,40 @@ from sqlalchemy.orm import Session, selectinload
 
 from .database import Base, DB_PATH, DATA_DIR, SessionLocal, engine, get_session
 from .catalog import catalog_entries, catalog_entry_by_slug
-from .models import FilamentProduct, Material, PriceEntry, PrinterPreset, PrintProfile
+from .models import (
+    FilamentProduct,
+    Material,
+    PriceEntry,
+    PrintAttachment,
+    PrinterMaintenance,
+    PrinterNozzle,
+    PrinterPreset,
+    PrintProfile,
+)
 from .seed import seed_materials, seed_printer_presets
 from .v2_routes import router as v2_router
 
 APP_DIR = Path(__file__).resolve().parent
+UPLOAD_DIR = DATA_DIR / "uploads"
+PHOTO_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+MODEL_EXTENSIONS = {".stl", ".3mf"}
+PHOTO_MAX_BYTES = 20 * 1024 * 1024
+MODEL_MAX_BYTES = 100 * 1024 * 1024
+NOZZLE_MATERIAL_OPTIONS = [
+    "brass",
+    "hardened steel",
+    "stainless steel",
+    "ruby / abrasive-resistant",
+    "other",
+]
+MAINTENANCE_TYPE_OPTIONS = [
+    "part replaced",
+    "service",
+    "repair",
+    "upgrade",
+    "inspection",
+    "other",
+]
 
 
 @asynccontextmanager
@@ -101,6 +132,107 @@ def parse_form_date(value: str | date | None, field_name: str) -> date:
         raise HTTPException(status_code=400, detail=f"{field_name} is invalid.") from exc
 
 
+def parse_optional_form_date(value: str | date | None, field_name: str) -> date | None:
+    if isinstance(value, date):
+        return value
+    cleaned = clean_text(value)
+    if not cleaned:
+        return None
+    return parse_form_date(cleaned, field_name)
+
+
+def parse_optional_float(value: str | float | None) -> float | None:
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="Number value is invalid.") from exc
+
+
+def parse_optional_nonnegative_float(value: str | float | None) -> float | None:
+    number = parse_optional_float(value)
+    return max(0, number) if number is not None else None
+
+
+def upload_root() -> Path:
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    return UPLOAD_DIR
+
+
+def validate_upload_filename(filename: str) -> tuple[str, str, int]:
+    original = clean_text(filename)
+    if not original or "/" in original or "\\" in original or Path(original).name != original or original in {".", ".."}:
+        raise HTTPException(status_code=400, detail="Uploaded file name is invalid.")
+
+    extension = Path(original).suffix.lower()
+    if extension in PHOTO_EXTENSIONS:
+        return extension, "photo", PHOTO_MAX_BYTES
+    if extension in MODEL_EXTENSIONS:
+        return extension, "model", MODEL_MAX_BYTES
+    raise HTTPException(status_code=400, detail="Only JPG, PNG, WEBP, STL and 3MF uploads are allowed.")
+
+
+def stored_upload_path(relative_path: str) -> Path:
+    root = upload_root().resolve()
+    candidate = (root / relative_path).resolve()
+    if candidate != root and root not in candidate.parents:
+        raise HTTPException(status_code=400, detail="Attachment path is invalid.")
+    return candidate
+
+
+def delete_stored_upload(relative_path: str) -> None:
+    try:
+        target = stored_upload_path(relative_path)
+    except HTTPException:
+        return
+    if target.exists() and target.is_file():
+        target.unlink()
+
+
+def delete_attachment_file(attachment: PrintAttachment) -> None:
+    delete_stored_upload(attachment.stored_relative_path)
+
+
+def store_profile_attachment(upload: UploadFile, profile_id: int) -> PrintAttachment | None:
+    if not upload.filename:
+        return None
+
+    extension, category, max_bytes = validate_upload_filename(upload.filename)
+    target_dir = upload_root() / "print-profiles" / str(profile_id)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / f"{uuid.uuid4().hex}{extension}"
+    total = 0
+
+    try:
+        with target.open("wb") as output:
+            while True:
+                chunk = upload.file.read(1024 * 1024)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > max_bytes:
+                    raise HTTPException(status_code=400, detail=f"{upload.filename} exceeds the upload size limit.")
+                output.write(chunk)
+    except Exception:
+        if target.exists():
+            target.unlink()
+        raise
+
+    if total <= 0:
+        target.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail="Uploaded files cannot be empty.")
+
+    return PrintAttachment(
+        print_profile_id=profile_id,
+        original_filename=Path(upload.filename).name,
+        stored_relative_path=target.relative_to(upload_root()).as_posix(),
+        file_category=category,
+        mime_type=upload.content_type or "application/octet-stream",
+        file_size=total,
+    )
+
+
 def text_has(text: str, *needles: str) -> bool:
     return any(needle in text for needle in needles)
 
@@ -136,26 +268,127 @@ def active_printers(session: Session) -> list[PrinterPreset]:
     return list(
         session.scalars(
             select(PrinterPreset)
+            .options(
+                selectinload(PrinterPreset.nozzles).selectinload(PrinterNozzle.print_profiles),
+                selectinload(PrinterPreset.print_profiles),
+                selectinload(PrinterPreset.maintenance_entries),
+            )
             .where(PrinterPreset.is_active.is_(True))
             .order_by(PrinterPreset.name)
         )
     )
 
 
+def all_printers(session: Session) -> list[PrinterPreset]:
+    return list(
+        session.scalars(
+            select(PrinterPreset)
+            .options(
+                selectinload(PrinterPreset.nozzles).selectinload(PrinterNozzle.print_profiles),
+                selectinload(PrinterPreset.print_profiles),
+                selectinload(PrinterPreset.maintenance_entries),
+            )
+            .order_by(PrinterPreset.is_active.desc(), PrinterPreset.name)
+        )
+    )
+
+
+def format_hours(value: float | None, empty: str = "No tracked hours yet") -> str:
+    if value is None or value <= 0:
+        return empty
+    if value >= 10:
+        return f"{value:.0f} h"
+    return f"{value:.1f} h"
+
+
+def nozzle_tracked_hours(nozzle: PrinterNozzle) -> float:
+    return max(0, nozzle.hours_before_tracking or 0) + sum(
+        max(0, profile.print_duration_hours or 0)
+        for profile in nozzle.print_profiles
+    )
+
+
+def printer_tracked_hours(printer: PrinterPreset) -> float:
+    return max(0, printer.hours_before_tracking or 0) + sum(
+        max(0, profile.print_duration_hours or 0)
+        for profile in printer.print_profiles
+    )
+
+
+def installed_nozzle(printer: PrinterPreset) -> PrinterNozzle | None:
+    return next((nozzle for nozzle in printer.nozzles if nozzle.installed and nozzle.is_active), None)
+
+
+def nozzle_payload(nozzle: PrinterNozzle) -> dict[str, Any]:
+    tracked_hours = nozzle_tracked_hours(nozzle)
+    return {
+        "id": nozzle.id,
+        "printer_id": nozzle.printer_id,
+        "label": nozzle.label,
+        "diameter_mm": nozzle.diameter_mm,
+        "nozzle_material": nozzle.nozzle_material,
+        "brand_product": nozzle.brand_product,
+        "installed": nozzle.installed,
+        "is_active": nozzle.is_active,
+        "installed_on": nozzle.installed_on.isoformat() if nozzle.installed_on else "",
+        "hours_before_tracking": nozzle.hours_before_tracking,
+        "tracked_hours": tracked_hours,
+        "tracked_hours_label": format_hours(tracked_hours),
+        "print_count": len(nozzle.print_profiles),
+        "notes": public_text(nozzle.notes),
+    }
+
+
+def maintenance_payload(entry: PrinterMaintenance) -> dict[str, Any]:
+    return {
+        "id": entry.id,
+        "printer_id": entry.printer_id,
+        "maintenance_date": entry.maintenance_date.isoformat(),
+        "maintenance_type": entry.maintenance_type,
+        "component": entry.component,
+        "notes": public_text(entry.notes),
+        "cost_eur": entry.cost_eur,
+        "printer_hours": entry.printer_hours,
+    }
+
+
 def printer_payload(printer: PrinterPreset) -> dict[str, Any]:
+    installed = installed_nozzle(printer)
+    tracked_hours = printer_tracked_hours(printer)
+    last_maintenance = next(iter(printer.maintenance_entries), None)
     return {
         "id": printer.id,
         "slug": printer.slug,
         "name": printer.name,
+        "description": public_text(printer.description),
+        "printer_type": printer.printer_type,
         "nozzle_max_c": printer.nozzle_max_c,
         "bed_max_c": printer.bed_max_c,
+        "chamber_max_c": printer.chamber_max_c,
         "enclosed": printer.enclosed,
+        "heated_chamber": printer.heated_chamber,
         "direct_drive": printer.direct_drive,
         "supports_flexible": printer.supports_flexible,
         "ams_capable": printer.ams_capable,
+        "build_volume": printer.build_volume,
+        "purchase_date": printer.purchase_date.isoformat() if printer.purchase_date else "",
+        "serial_number": printer.serial_number,
+        "hours_before_tracking": printer.hours_before_tracking,
+        "tracked_hours": tracked_hours,
+        "tracked_hours_label": format_hours(tracked_hours),
+        "print_count": len(printer.print_profiles),
+        "nozzle_count": len([nozzle for nozzle in printer.nozzles if nozzle.is_active]),
+        "installed_nozzle": nozzle_payload(installed) if installed else None,
+        "last_maintenance_date": last_maintenance.maintenance_date.isoformat() if last_maintenance else "",
+        "nozzles": [nozzle_payload(nozzle) for nozzle in printer.nozzles],
+        "maintenance_entries": [maintenance_payload(entry) for entry in printer.maintenance_entries],
         "notes": public_text(printer.notes),
         "is_active": printer.is_active,
     }
+
+
+def printer_can_delete(printer: PrinterPreset) -> bool:
+    return not printer.print_profiles and not printer.nozzles and not printer.maintenance_entries
 
 
 def parsed_number(value: Any) -> float | None:
@@ -226,6 +459,8 @@ def material_compatibility(
         if nozzle_max is not None and printer.nozzle_max_c and nozzle_max > printer.nozzle_max_c:
             continue
         if bed_max is not None and printer.bed_max_c and bed_max > printer.bed_max_c:
+            continue
+        if chamber_max is not None and printer.chamber_max_c and chamber_max > printer.chamber_max_c:
             continue
         if requires_enclosure and not printer.enclosed:
             continue
@@ -344,7 +579,7 @@ def engineering_reference_rows(
             score_number = float(score_value)
         except (TypeError, ValueError):
             score_number = 0
-        score_number = max(0, min(10, score_number))
+        score_number = max(0.0, min(10.0, score_number))
         display_score = int(score_number) if score_number.is_integer() else round(score_number, 1)
         return {
             "key": key,
@@ -469,6 +704,12 @@ def product_filament_usage(product: FilamentProduct) -> tuple[float, float, floa
     return used_g, remaining_g, remaining_percent
 
 
+def product_last_profile(product: FilamentProduct) -> PrintProfile | None:
+    if not product.print_profiles:
+        return None
+    return sorted(product.print_profiles, key=lambda profile: (profile.printed_on, profile.id), reverse=True)[0]
+
+
 def display_spool_code(product: FilamentProduct) -> str:
     return product.spool_code or f"S-{product.id:03d}"
 
@@ -487,6 +728,8 @@ def product_detail_options():
         selectinload(FilamentProduct.price_entries),
         selectinload(FilamentProduct.print_profiles).selectinload(PrintProfile.material),
         selectinload(FilamentProduct.print_profiles).selectinload(PrintProfile.printer),
+        selectinload(FilamentProduct.print_profiles).selectinload(PrintProfile.printer_nozzle),
+        selectinload(FilamentProduct.print_profiles).selectinload(PrintProfile.attachments),
     )
 
 
@@ -523,6 +766,7 @@ def ensure_unique_spool_code(
 def product_payload(product: FilamentProduct) -> dict[str, Any]:
     latest, per_kg, observed = product_price(product)
     used_g, remaining_g, remaining_percent = product_filament_usage(product)
+    last_profile = product_last_profile(product)
     return {
         "id": product.id,
         "material_id": product.material_id,
@@ -545,6 +789,8 @@ def product_payload(product: FilamentProduct) -> dict[str, Any]:
         "latest_price_eur": latest,
         "price_per_kg": per_kg,
         "price_observed_on": observed.isoformat() if observed else None,
+        "last_printed_on": last_profile.printed_on.isoformat() if last_profile else None,
+        "last_profile_name": last_profile.profile_name if last_profile else "",
         "price_entries": [
             {
                 "id": p.id,
@@ -859,12 +1105,34 @@ def catalog_detail_payload(
     return payload
 
 
+def attachment_payload(attachment: PrintAttachment) -> dict[str, Any]:
+    return {
+        "id": attachment.id,
+        "original_filename": attachment.original_filename,
+        "file_category": attachment.file_category,
+        "mime_type": attachment.mime_type,
+        "file_size": attachment.file_size,
+        "size_label": f"{attachment.file_size / 1024 / 1024:.1f} MB"
+        if attachment.file_size >= 1024 * 1024
+        else f"{max(1, round(attachment.file_size / 1024))} KB",
+        "uploaded_at": attachment.uploaded_at.isoformat(),
+        "download_path": f"/attachments/{attachment.id}/download",
+        "delete_path": f"/attachments/{attachment.id}/delete",
+        "is_photo": attachment.file_category == "photo",
+    }
+
+
 def profile_payload(profile: PrintProfile) -> dict[str, Any]:
     return {
         "id": profile.id,
         "profile_name": profile.profile_name,
         "state": profile.state,
+        "material_id": profile.material_id,
+        "product_id": profile.product_id,
         "printer_name": profile.printer.name if profile.printer else "",
+        "printer_id": profile.printer_id,
+        "printer_nozzle_id": profile.printer_nozzle_id,
+        "nozzle_label": profile.printer_nozzle.label if profile.printer_nozzle else "",
         "nozzle_diameter": profile.nozzle_diameter,
         "nozzle_temp": profile.nozzle_temp,
         "bed_temp": profile.bed_temp,
@@ -874,12 +1142,17 @@ def profile_payload(profile: PrintProfile) -> dict[str, Any]:
         "dryer_hours": profile.dryer_hours,
         "build_plate": profile.build_plate,
         "filament_used_g": profile.filament_used_g,
+        "print_duration_hours": profile.print_duration_hours,
+        "print_duration_label": format_hours(profile.print_duration_hours, "-"),
         "result_rating": profile.result_rating,
         "notes": profile.notes,
         "printed_on": profile.printed_on.isoformat(),
+        "material_name": profile.material.name if profile.material else "",
+        "material_slug": profile.material.slug if profile.material else "",
         "product_name": f"{profile.product.brand} {profile.product.product_name}" if profile.product else None,
         "product_spool_code": display_spool_code(profile.product) if profile.product else None,
         "product_spool_path": spool_path(profile.product) if profile.product else None,
+        "attachments": [attachment_payload(attachment) for attachment in profile.attachments],
         "edit_path": f"/profiles/{profile.id}/edit",
     }
 
@@ -897,6 +1170,41 @@ def all_materials(session: Session) -> list[Material]:
 
 
 def page(request: Request, template: str, **context: Any):
+    page_labels = {
+        "dashboard": "Dashboard",
+        "inventory": "My Spools & Prints",
+        "calculator": "Cost Calculator",
+        "materials": "Material Library",
+        "guide": "Material Guide",
+        "compare": "Compare Materials",
+        "printers": "Printers",
+        "settings": "Settings",
+    }
+    nav_groups = [
+        SimpleNamespace(
+            label="Workshop",
+            items=[
+                ("Dashboard", "/", "dashboard"),
+                ("My Spools & Prints", "/inventory", "inventory"),
+                ("Cost Calculator", "/calculator", "calculator"),
+            ],
+        ),
+        SimpleNamespace(
+            label="Material Database",
+            items=[
+                ("Material Library", "/materials", "materials"),
+                ("Material Guide", "/guide", "guide"),
+                ("Compare Materials", "/compare", "compare"),
+            ],
+        ),
+        SimpleNamespace(
+            label="System",
+            items=[
+                ("Printers", "/printers", "printers"),
+                ("Settings", "/settings", "settings"),
+            ],
+        ),
+    ]
     defaults = {
         "request": request,
         "nav": [
@@ -905,14 +1213,17 @@ def page(request: Request, template: str, **context: Any):
             ("Material Guide", "/guide", "guide"),
             ("Compare", "/compare", "compare"),
             ("Cost Calculator", "/calculator", "calculator"),
-            ("Inventory & Tests", "/inventory", "inventory"),
+            ("My Spools & Prints", "/inventory", "inventory"),
+            ("Printers", "/printers", "printers"),
             ("Settings", "/settings", "settings"),
         ],
+        "nav_groups": nav_groups,
+        "page_label": page_labels.get(context.get("page_name", ""), context.get("page_name", "")),
         "score_labels": SCORE_LABELS,
         "today": date.today().isoformat(),
     }
     defaults.update(context)
-    return templates.TemplateResponse(template, defaults)
+    return templates.TemplateResponse(request, template, defaults)
 
 
 @app.get("/")
@@ -920,13 +1231,588 @@ def dashboard(request: Request, session: Session = Depends(get_session)):
     materials = all_materials(session)
     printers = active_printers(session)
     material_data = [material_payload(m, printers=printers) for m in materials]
+    products = list(
+        session.scalars(
+            select(FilamentProduct)
+            .options(
+                selectinload(FilamentProduct.material),
+                selectinload(FilamentProduct.price_entries),
+                selectinload(FilamentProduct.print_profiles),
+            )
+            .where(FilamentProduct.is_active.is_(True))
+            .order_by(FilamentProduct.favorite.desc(), FilamentProduct.brand, FilamentProduct.product_name)
+        )
+    )
+    profiles = list(
+        session.scalars(
+            select(PrintProfile)
+            .options(
+                selectinload(PrintProfile.material),
+                selectinload(PrintProfile.product),
+                selectinload(PrintProfile.printer),
+                selectinload(PrintProfile.printer_nozzle),
+                selectinload(PrintProfile.attachments),
+            )
+            .order_by(PrintProfile.printed_on.desc(), PrintProfile.id.desc())
+            .limit(6)
+        )
+    )
+    product_rows = [
+        {**product_payload(product), "material_name": product.material.name, "material_slug": product.material.slug}
+        for product in products
+    ]
+    low_stock_products = [product for product in product_rows if product["remaining_percent"] <= 20]
+    no_price_products = [product for product in product_rows if product["price_per_kg"] is None]
+    untested_products = [product for product in product_rows if product["profile_count"] == 0]
     stats = {
         "materials": len(materials),
-        "products": sum(len(active_products(m.products)) for m in materials),
+        "products": len(product_rows),
+        "remaining_g": sum(product["remaining_g"] for product in product_rows),
+        "low_stock": len(low_stock_products),
+        "no_price": len(no_price_products),
+        "untested_spools": len(untested_products),
         "tested_profiles": len(session.scalars(select(PrintProfile)).all()),
         "families": len({m.family for m in materials}),
+        "owned_materials": len({product["material_id"] for product in product_rows}),
     }
-    return page(request, "dashboard.html", page_name="dashboard", materials=material_data, stats=stats)
+    attention_items = []
+    for product in low_stock_products[:4]:
+        attention_items.append({
+            "kind": "Low stock",
+            "text": f"{product['spool_code']} has {product['remaining_g']:.1f} g remaining.",
+            "href": product["spool_path"],
+            "tone": "warning",
+        })
+    for product in no_price_products[:3]:
+        attention_items.append({
+            "kind": "Missing price",
+            "text": f"{product['spool_code']} has no price history.",
+            "href": product["spool_path"],
+            "tone": "warning",
+        })
+    for product in untested_products[:3]:
+        attention_items.append({
+            "kind": "No print result recorded yet",
+            "text": f"{product['spool_code']} is ready for its first saved print result.",
+            "href": product["spool_path"],
+            "tone": "neutral",
+        })
+    return page(
+        request,
+        "dashboard.html",
+        page_name="dashboard",
+        materials=material_data[:6],
+        products=product_rows[:6],
+        recent_profiles=[
+            {**profile_payload(profile), "material_name": profile.material.name, "material_slug": profile.material.slug}
+            for profile in profiles
+        ],
+        attention_items=attention_items[:6],
+        stats=stats,
+    )
+
+
+def printer_detail_options():
+    return (
+        selectinload(PrinterPreset.nozzles).selectinload(PrinterNozzle.print_profiles),
+        selectinload(PrinterPreset.maintenance_entries),
+        selectinload(PrinterPreset.print_profiles).selectinload(PrintProfile.material),
+        selectinload(PrinterPreset.print_profiles).selectinload(PrintProfile.product),
+        selectinload(PrinterPreset.print_profiles).selectinload(PrintProfile.printer),
+        selectinload(PrinterPreset.print_profiles).selectinload(PrintProfile.printer_nozzle),
+        selectinload(PrinterPreset.print_profiles).selectinload(PrintProfile.attachments),
+    )
+
+
+def printer_or_404(session: Session, printer_id: int) -> PrinterPreset:
+    printer = session.scalar(
+        select(PrinterPreset)
+        .options(*printer_detail_options())
+        .where(PrinterPreset.id == printer_id)
+    )
+    if not printer:
+        raise HTTPException(status_code=404, detail="Printer not found")
+    return printer
+
+
+def nozzle_or_404(session: Session, printer_id: int, nozzle_id: int) -> PrinterNozzle:
+    nozzle = session.scalar(
+        select(PrinterNozzle)
+        .options(selectinload(PrinterNozzle.print_profiles))
+        .where(PrinterNozzle.id == nozzle_id, PrinterNozzle.printer_id == printer_id)
+    )
+    if not nozzle:
+        raise HTTPException(status_code=404, detail="Nozzle not found")
+    return nozzle
+
+
+def maintenance_or_404(session: Session, printer_id: int, entry_id: int) -> PrinterMaintenance:
+    entry = session.scalar(
+        select(PrinterMaintenance)
+        .where(PrinterMaintenance.id == entry_id, PrinterMaintenance.printer_id == printer_id)
+    )
+    if not entry:
+        raise HTTPException(status_code=404, detail="Maintenance entry not found")
+    return entry
+
+
+def blank_printer_payload() -> dict[str, Any]:
+    return {
+        "name": "",
+        "description": "",
+        "printer_type": "FDM / FFF",
+        "nozzle_max_c": 300,
+        "bed_max_c": 100,
+        "chamber_max_c": 0,
+        "enclosed": False,
+        "heated_chamber": False,
+        "direct_drive": True,
+        "supports_flexible": True,
+        "ams_capable": False,
+        "build_volume": "",
+        "purchase_date": "",
+        "serial_number": "",
+        "hours_before_tracking": 0,
+        "notes": "",
+        "is_active": True,
+    }
+
+
+def blank_nozzle_payload(printer_id: int) -> dict[str, Any]:
+    return {
+        "id": None,
+        "printer_id": printer_id,
+        "label": "",
+        "diameter_mm": 0.4,
+        "nozzle_material": "brass",
+        "brand_product": "",
+        "installed": False,
+        "is_active": True,
+        "installed_on": "",
+        "hours_before_tracking": 0,
+        "notes": "",
+    }
+
+
+def blank_maintenance_payload(printer_id: int) -> dict[str, Any]:
+    return {
+        "id": None,
+        "printer_id": printer_id,
+        "maintenance_date": date.today().isoformat(),
+        "maintenance_type": "service",
+        "component": "",
+        "notes": "",
+        "cost_eur": "",
+        "printer_hours": "",
+    }
+
+
+def unique_printer_slug(session: Session, name: str, current_printer_id: int | None = None) -> str:
+    base_slug = slugify(name)
+    slug = base_slug
+    counter = 2
+    while True:
+        existing = session.scalar(select(PrinterPreset).where(PrinterPreset.slug == slug))
+        if not existing or existing.id == current_printer_id:
+            return slug
+        slug = f"{base_slug}-{counter}"
+        counter += 1
+
+
+def update_nozzle_install_state(printer: PrinterPreset, installed_nozzle: PrinterNozzle | None) -> None:
+    if installed_nozzle and installed_nozzle.is_active and installed_nozzle.installed:
+        for nozzle in printer.nozzles:
+            if nozzle.id != installed_nozzle.id:
+                nozzle.installed = False
+    elif installed_nozzle and not installed_nozzle.is_active:
+        installed_nozzle.installed = False
+
+
+@app.get("/printers")
+def printers_page(request: Request, session: Session = Depends(get_session)):
+    printers = all_printers(session)
+    active = [printer_payload(printer) for printer in printers if printer.is_active]
+    archived = [printer_payload(printer) for printer in printers if not printer.is_active]
+    return page(
+        request,
+        "printers.html",
+        page_name="printers",
+        printers=active,
+        archived_printers=archived,
+    )
+
+
+@app.get("/printers/new")
+def new_printer_form(request: Request):
+    return page(
+        request,
+        "printer_form.html",
+        page_name="printers",
+        mode="create",
+        printer=blank_printer_payload(),
+    )
+
+
+@app.post("/printers/new")
+def create_printer(
+    name: str = Form(...),
+    description: str = Form(""),
+    printer_type: str = Form("FDM / FFF"),
+    nozzle_max_c: float = Form(300),
+    bed_max_c: float = Form(100),
+    chamber_max_c: float = Form(0),
+    enclosed: bool = Form(False),
+    heated_chamber: bool = Form(False),
+    direct_drive: bool = Form(True),
+    supports_flexible: bool = Form(True),
+    ams_capable: bool = Form(False),
+    build_volume: str = Form(""),
+    purchase_date: str = Form(""),
+    serial_number: str = Form(""),
+    hours_before_tracking: float = Form(0),
+    notes: str = Form(""),
+    is_active: bool = Form(True),
+    session: Session = Depends(get_session),
+):
+    printer = PrinterPreset(
+        slug=unique_printer_slug(session, name),
+        name=clean_text(name),
+        description=clean_text(description),
+        printer_type=clean_text(printer_type) or "FDM / FFF",
+        nozzle_max_c=max(0, nozzle_max_c),
+        bed_max_c=max(0, bed_max_c),
+        chamber_max_c=max(0, chamber_max_c),
+        enclosed=enclosed,
+        heated_chamber=heated_chamber,
+        direct_drive=direct_drive,
+        supports_flexible=supports_flexible,
+        ams_capable=ams_capable,
+        build_volume=clean_text(build_volume),
+        purchase_date=parse_optional_form_date(purchase_date, "Purchase date"),
+        serial_number=clean_text(serial_number),
+        hours_before_tracking=max(0, hours_before_tracking),
+        notes=clean_text(notes),
+        is_active=is_active,
+    )
+    session.add(printer)
+    session.commit()
+    return RedirectResponse(f"/printers/{printer.id}", status_code=303)
+
+
+@app.get("/printers/{printer_id}")
+def printer_detail(printer_id: int, request: Request, session: Session = Depends(get_session)):
+    printer = printer_or_404(session, printer_id)
+    profiles = sorted(printer.print_profiles, key=lambda item: (item.printed_on, item.id), reverse=True)
+    payload = printer_payload(printer)
+    payload["can_delete"] = printer_can_delete(printer)
+    return page(
+        request,
+        "printer_detail.html",
+        page_name="printers",
+        printer=payload,
+        profiles=[profile_payload(profile) for profile in profiles[:12]],
+    )
+
+
+@app.get("/printers/{printer_id}/edit")
+def edit_printer_form(printer_id: int, request: Request, session: Session = Depends(get_session)):
+    printer = printer_or_404(session, printer_id)
+    return page(
+        request,
+        "printer_form.html",
+        page_name="printers",
+        mode="edit",
+        printer=printer_payload(printer),
+    )
+
+
+@app.post("/printers/{printer_id}/edit")
+def update_printer(
+    printer_id: int,
+    name: str = Form(...),
+    description: str = Form(""),
+    printer_type: str = Form("FDM / FFF"),
+    nozzle_max_c: float = Form(300),
+    bed_max_c: float = Form(100),
+    chamber_max_c: float = Form(0),
+    enclosed: bool = Form(False),
+    heated_chamber: bool = Form(False),
+    direct_drive: bool = Form(True),
+    supports_flexible: bool = Form(True),
+    ams_capable: bool = Form(False),
+    build_volume: str = Form(""),
+    purchase_date: str = Form(""),
+    serial_number: str = Form(""),
+    hours_before_tracking: float = Form(0),
+    notes: str = Form(""),
+    is_active: bool = Form(False),
+    session: Session = Depends(get_session),
+):
+    printer = printer_or_404(session, printer_id)
+    printer.name = clean_text(name)
+    printer.slug = unique_printer_slug(session, printer.name, current_printer_id=printer.id)
+    printer.description = clean_text(description)
+    printer.printer_type = clean_text(printer_type) or "FDM / FFF"
+    printer.nozzle_max_c = max(0, nozzle_max_c)
+    printer.bed_max_c = max(0, bed_max_c)
+    printer.chamber_max_c = max(0, chamber_max_c)
+    printer.enclosed = enclosed
+    printer.heated_chamber = heated_chamber
+    printer.direct_drive = direct_drive
+    printer.supports_flexible = supports_flexible
+    printer.ams_capable = ams_capable
+    printer.build_volume = clean_text(build_volume)
+    printer.purchase_date = parse_optional_form_date(purchase_date, "Purchase date")
+    printer.serial_number = clean_text(serial_number)
+    printer.hours_before_tracking = max(0, hours_before_tracking)
+    printer.notes = clean_text(notes)
+    printer.is_active = is_active
+    session.commit()
+    return RedirectResponse(f"/printers/{printer.id}", status_code=303)
+
+
+@app.post("/printers/{printer_id}/archive")
+def archive_printer(printer_id: int, return_to: str = Form(""), session: Session = Depends(get_session)):
+    printer = printer_or_404(session, printer_id)
+    printer.is_active = False
+    session.commit()
+    return RedirectResponse(return_to or f"/printers/{printer.id}", status_code=303)
+
+
+@app.post("/printers/{printer_id}/restore")
+def restore_printer(printer_id: int, return_to: str = Form(""), session: Session = Depends(get_session)):
+    printer = printer_or_404(session, printer_id)
+    printer.is_active = True
+    session.commit()
+    return RedirectResponse(return_to or f"/printers/{printer.id}", status_code=303)
+
+
+@app.post("/printers/{printer_id}/delete")
+def delete_printer(printer_id: int, session: Session = Depends(get_session)):
+    printer = printer_or_404(session, printer_id)
+    if not printer_can_delete(printer):
+        printer.is_active = False
+        session.commit()
+        return RedirectResponse(f"/printers/{printer.id}", status_code=303)
+    session.delete(printer)
+    session.commit()
+    return RedirectResponse("/printers", status_code=303)
+
+
+@app.get("/printers/{printer_id}/nozzles/new")
+def new_nozzle_form(printer_id: int, request: Request, session: Session = Depends(get_session)):
+    printer = printer_or_404(session, printer_id)
+    return page(
+        request,
+        "nozzle_form.html",
+        page_name="printers",
+        mode="create",
+        printer=printer_payload(printer),
+        nozzle=blank_nozzle_payload(printer.id),
+        nozzle_material_options=NOZZLE_MATERIAL_OPTIONS,
+    )
+
+
+@app.post("/printers/{printer_id}/nozzles/new")
+def create_nozzle(
+    printer_id: int,
+    label: str = Form(...),
+    diameter_mm: float = Form(0.4),
+    nozzle_material: str = Form("brass"),
+    brand_product: str = Form(""),
+    installed: bool = Form(False),
+    is_active: bool = Form(True),
+    installed_on: str = Form(""),
+    hours_before_tracking: float = Form(0),
+    notes: str = Form(""),
+    session: Session = Depends(get_session),
+):
+    printer = printer_or_404(session, printer_id)
+    if nozzle_material not in NOZZLE_MATERIAL_OPTIONS:
+        nozzle_material = "other"
+    nozzle = PrinterNozzle(
+        printer=printer,
+        label=clean_text(label),
+        diameter_mm=max(0, diameter_mm),
+        nozzle_material=nozzle_material,
+        brand_product=clean_text(brand_product),
+        installed=installed and is_active,
+        is_active=is_active,
+        installed_on=parse_optional_form_date(installed_on, "Install date"),
+        hours_before_tracking=max(0, hours_before_tracking),
+        notes=clean_text(notes),
+    )
+    session.add(nozzle)
+    session.flush()
+    update_nozzle_install_state(printer, nozzle)
+    session.commit()
+    return RedirectResponse(f"/printers/{printer.id}#nozzles", status_code=303)
+
+
+@app.get("/printers/{printer_id}/nozzles/{nozzle_id}/edit")
+def edit_nozzle_form(printer_id: int, nozzle_id: int, request: Request, session: Session = Depends(get_session)):
+    printer = printer_or_404(session, printer_id)
+    nozzle = nozzle_or_404(session, printer_id, nozzle_id)
+    return page(
+        request,
+        "nozzle_form.html",
+        page_name="printers",
+        mode="edit",
+        printer=printer_payload(printer),
+        nozzle=nozzle_payload(nozzle),
+        nozzle_material_options=NOZZLE_MATERIAL_OPTIONS,
+    )
+
+
+@app.post("/printers/{printer_id}/nozzles/{nozzle_id}/edit")
+def update_nozzle(
+    printer_id: int,
+    nozzle_id: int,
+    label: str = Form(...),
+    diameter_mm: float = Form(0.4),
+    nozzle_material: str = Form("brass"),
+    brand_product: str = Form(""),
+    installed: bool = Form(False),
+    is_active: bool = Form(False),
+    installed_on: str = Form(""),
+    hours_before_tracking: float = Form(0),
+    notes: str = Form(""),
+    session: Session = Depends(get_session),
+):
+    printer = printer_or_404(session, printer_id)
+    nozzle = nozzle_or_404(session, printer_id, nozzle_id)
+    if nozzle_material not in NOZZLE_MATERIAL_OPTIONS:
+        nozzle_material = "other"
+    nozzle.label = clean_text(label)
+    nozzle.diameter_mm = max(0, diameter_mm)
+    nozzle.nozzle_material = nozzle_material
+    nozzle.brand_product = clean_text(brand_product)
+    nozzle.is_active = is_active
+    nozzle.installed = installed and is_active
+    nozzle.installed_on = parse_optional_form_date(installed_on, "Install date")
+    nozzle.hours_before_tracking = max(0, hours_before_tracking)
+    nozzle.notes = clean_text(notes)
+    update_nozzle_install_state(printer, nozzle)
+    session.commit()
+    return RedirectResponse(f"/printers/{printer.id}#nozzles", status_code=303)
+
+
+@app.post("/printers/{printer_id}/nozzles/{nozzle_id}/retire")
+def retire_nozzle(printer_id: int, nozzle_id: int, session: Session = Depends(get_session)):
+    nozzle = nozzle_or_404(session, printer_id, nozzle_id)
+    nozzle.is_active = False
+    nozzle.installed = False
+    session.commit()
+    return RedirectResponse(f"/printers/{printer_id}#nozzles", status_code=303)
+
+
+@app.post("/printers/{printer_id}/nozzles/{nozzle_id}/delete")
+def delete_nozzle(printer_id: int, nozzle_id: int, session: Session = Depends(get_session)):
+    nozzle = nozzle_or_404(session, printer_id, nozzle_id)
+    if nozzle.print_profiles:
+        nozzle.is_active = False
+        nozzle.installed = False
+    else:
+        session.delete(nozzle)
+    session.commit()
+    return RedirectResponse(f"/printers/{printer_id}#nozzles", status_code=303)
+
+
+@app.get("/printers/{printer_id}/maintenance/new")
+def new_maintenance_form(printer_id: int, request: Request, session: Session = Depends(get_session)):
+    printer = printer_or_404(session, printer_id)
+    return page(
+        request,
+        "maintenance_form.html",
+        page_name="printers",
+        mode="create",
+        printer=printer_payload(printer),
+        entry=blank_maintenance_payload(printer.id),
+        maintenance_type_options=MAINTENANCE_TYPE_OPTIONS,
+    )
+
+
+@app.post("/printers/{printer_id}/maintenance/new")
+def create_maintenance(
+    printer_id: int,
+    maintenance_date: str = Form(""),
+    maintenance_type: str = Form("service"),
+    component: str = Form(""),
+    notes: str = Form(""),
+    cost_eur: str = Form(""),
+    printer_hours: str = Form(""),
+    session: Session = Depends(get_session),
+):
+    printer = printer_or_404(session, printer_id)
+    if maintenance_type not in MAINTENANCE_TYPE_OPTIONS:
+        maintenance_type = "other"
+    session.add(
+        PrinterMaintenance(
+            printer_id=printer.id,
+            maintenance_date=parse_form_date(maintenance_date, "Maintenance date"),
+            maintenance_type=maintenance_type,
+            component=clean_text(component),
+            notes=clean_text(notes),
+            cost_eur=parse_optional_nonnegative_float(cost_eur),
+            printer_hours=parse_optional_nonnegative_float(printer_hours),
+        )
+    )
+    session.commit()
+    return RedirectResponse(f"/printers/{printer.id}#maintenance", status_code=303)
+
+
+@app.get("/printers/{printer_id}/maintenance/{entry_id}/edit")
+def edit_maintenance_form(printer_id: int, entry_id: int, request: Request, session: Session = Depends(get_session)):
+    printer = printer_or_404(session, printer_id)
+    entry = maintenance_or_404(session, printer_id, entry_id)
+    return page(
+        request,
+        "maintenance_form.html",
+        page_name="printers",
+        mode="edit",
+        printer=printer_payload(printer),
+        entry=maintenance_payload(entry),
+        maintenance_type_options=MAINTENANCE_TYPE_OPTIONS,
+    )
+
+
+@app.post("/printers/{printer_id}/maintenance/{entry_id}/edit")
+def update_maintenance(
+    printer_id: int,
+    entry_id: int,
+    maintenance_date: str = Form(""),
+    maintenance_type: str = Form("service"),
+    component: str = Form(""),
+    notes: str = Form(""),
+    cost_eur: str = Form(""),
+    printer_hours: str = Form(""),
+    session: Session = Depends(get_session),
+):
+    entry = maintenance_or_404(session, printer_id, entry_id)
+    if maintenance_type not in MAINTENANCE_TYPE_OPTIONS:
+        maintenance_type = "other"
+    entry.maintenance_date = parse_form_date(maintenance_date, "Maintenance date")
+    entry.maintenance_type = maintenance_type
+    entry.component = clean_text(component)
+    entry.notes = clean_text(notes)
+    entry.cost_eur = parse_optional_nonnegative_float(cost_eur)
+    entry.printer_hours = parse_optional_nonnegative_float(printer_hours)
+    session.commit()
+    return RedirectResponse(f"/printers/{printer_id}#maintenance", status_code=303)
+
+
+@app.post("/printers/{printer_id}/maintenance/{entry_id}/delete")
+def delete_maintenance(printer_id: int, entry_id: int, session: Session = Depends(get_session)):
+    entry = maintenance_or_404(session, printer_id, entry_id)
+    session.delete(entry)
+    session.commit()
+    return RedirectResponse(f"/printers/{printer_id}#maintenance", status_code=303)
+
+
+@app.get("/api/printers/{printer_id}/nozzles")
+def api_printer_nozzles(printer_id: int, session: Session = Depends(get_session)):
+    printer = printer_or_404(session, printer_id)
+    return JSONResponse([nozzle_payload(nozzle) for nozzle in printer.nozzles if nozzle.is_active])
 
 
 @app.get("/materials")
@@ -1233,6 +2119,8 @@ def material_detail(slug: str, request: Request, session: Session = Depends(get_
             selectinload(Material.products).selectinload(FilamentProduct.print_profiles),
             selectinload(Material.print_profiles).selectinload(PrintProfile.product),
             selectinload(Material.print_profiles).selectinload(PrintProfile.printer),
+            selectinload(Material.print_profiles).selectinload(PrintProfile.printer_nozzle),
+            selectinload(Material.print_profiles).selectinload(PrintProfile.attachments),
         )
         .where(Material.slug == slug)
     )
@@ -1247,6 +2135,7 @@ def material_detail(slug: str, request: Request, session: Session = Depends(get_
             material=payload,
             profiles=[],
             printers=[printer_payload(printer) for printer in printers],
+            nozzles=[nozzle_option_payload(nozzle) for nozzle in nozzle_select_options(session)],
         )
     payload = material_payload(material, printers=printers)
     profiles = [profile_payload(p) for p in material.print_profiles]
@@ -1257,6 +2146,7 @@ def material_detail(slug: str, request: Request, session: Session = Depends(get_
         material=payload,
         profiles=profiles,
         printers=[printer_payload(printer) for printer in printers],
+        nozzles=[nozzle_option_payload(nozzle) for nozzle in nozzle_select_options(session)],
     )
 
 
@@ -1458,12 +2348,236 @@ def add_price(
     return RedirectResponse(return_to or f"/materials/{product.material.slug}#products", status_code=303)
 
 
-@app.post("/materials/{slug}/profiles")
-def add_profile(
-    slug: str,
+def price_or_404(session: Session, price_id: int) -> PriceEntry:
+    entry = session.scalar(
+        select(PriceEntry)
+        .options(selectinload(PriceEntry.product).selectinload(FilamentProduct.material))
+        .options(selectinload(PriceEntry.product).selectinload(FilamentProduct.price_entries))
+        .options(selectinload(PriceEntry.product).selectinload(FilamentProduct.print_profiles))
+        .where(PriceEntry.id == price_id)
+    )
+    if not entry:
+        raise HTTPException(status_code=404, detail="Price entry not found")
+    return entry
+
+
+@app.get("/prices/{price_id}/edit")
+def edit_price_form(price_id: int, request: Request, session: Session = Depends(get_session)):
+    entry = price_or_404(session, price_id)
+    return page(
+        request,
+        "price_form.html",
+        page_name="inventory",
+        entry=entry,
+        product=spool_page_payload(entry.product),
+    )
+
+
+@app.post("/prices/{price_id}/edit")
+def update_price(
+    price_id: int,
+    price_eur: float = Form(...),
+    observed_on: str = Form(""),
+    source_label: str = Form("Manual entry"),
+    stock_note: str = Form(""),
+    session: Session = Depends(get_session),
+):
+    entry = price_or_404(session, price_id)
+    if price_eur < 0:
+        raise HTTPException(status_code=400, detail="Price cannot be negative.")
+    entry.price_eur = price_eur
+    entry.observed_on = parse_form_date(observed_on, "Price date")
+    entry.source_label = source_label.strip()
+    entry.stock_note = stock_note.strip()
+    return_to = spool_path(entry.product)
+    session.commit()
+    return RedirectResponse(return_to, status_code=303)
+
+
+@app.post("/prices/{price_id}/delete")
+def delete_price(price_id: int, session: Session = Depends(get_session)):
+    entry = price_or_404(session, price_id)
+    return_to = spool_path(entry.product)
+    session.delete(entry)
+    session.commit()
+    return RedirectResponse(return_to, status_code=303)
+
+
+def product_select_options(session: Session, current_product_id: int | None = None) -> list[dict[str, Any]]:
+    products = list(
+        session.scalars(
+            select(FilamentProduct)
+            .options(selectinload(FilamentProduct.material))
+            .where(FilamentProduct.is_active.is_(True))
+            .order_by(FilamentProduct.brand, FilamentProduct.product_name, FilamentProduct.id)
+        )
+    )
+    if current_product_id and all(product.id != current_product_id for product in products):
+        current = session.scalar(
+            select(FilamentProduct)
+            .options(selectinload(FilamentProduct.material))
+            .where(FilamentProduct.id == current_product_id)
+        )
+        if current:
+            products.append(current)
+    return [
+        {
+            "id": product.id,
+            "material_id": product.material_id,
+            "label": f"{display_spool_code(product)} - {product.material.name} - {product.brand} {product.product_name}",
+        }
+        for product in products
+    ]
+
+
+def printer_select_options(session: Session, current_printer_id: int | None = None) -> list[PrinterPreset]:
+    printers = active_printers(session)
+    if current_printer_id and all(printer.id != current_printer_id for printer in printers):
+        current = session.scalar(
+            select(PrinterPreset)
+            .options(
+                selectinload(PrinterPreset.nozzles).selectinload(PrinterNozzle.print_profiles),
+                selectinload(PrinterPreset.print_profiles),
+                selectinload(PrinterPreset.maintenance_entries),
+            )
+            .where(PrinterPreset.id == current_printer_id)
+        )
+        if current:
+            printers.append(current)
+    return printers
+
+
+def nozzle_select_options(session: Session, current_nozzle_id: int | None = None) -> list[PrinterNozzle]:
+    nozzles = list(
+        session.scalars(
+            select(PrinterNozzle)
+            .options(selectinload(PrinterNozzle.printer), selectinload(PrinterNozzle.print_profiles))
+            .where(PrinterNozzle.is_active.is_(True))
+            .order_by(PrinterNozzle.printer_id, PrinterNozzle.installed.desc(), PrinterNozzle.label)
+        )
+    )
+    if current_nozzle_id and all(nozzle.id != current_nozzle_id for nozzle in nozzles):
+        current = session.scalar(
+            select(PrinterNozzle)
+            .options(selectinload(PrinterNozzle.printer), selectinload(PrinterNozzle.print_profiles))
+            .where(PrinterNozzle.id == current_nozzle_id)
+        )
+        if current:
+            nozzles.append(current)
+    return nozzles
+
+
+def nozzle_option_payload(nozzle: PrinterNozzle) -> dict[str, Any]:
+    return {
+        **nozzle_payload(nozzle),
+        "printer_name": nozzle.printer.name if nozzle.printer else "",
+        "label_with_printer": f"{nozzle.printer.name if nozzle.printer else 'Printer'} - {nozzle.label}",
+    }
+
+
+def blank_profile_payload(material_id: int | None = None) -> dict[str, Any]:
+    return {
+        "id": None,
+        "material_id": material_id,
+        "product_id": None,
+        "printer_id": None,
+        "printer_nozzle_id": None,
+        "profile_name": "",
+        "state": "Dry",
+        "nozzle_diameter": 0.4,
+        "nozzle_temp": 0,
+        "bed_temp": 0,
+        "chamber_temp": 0,
+        "speed_mm_s": 0,
+        "dryer_temp": 0,
+        "dryer_hours": 0,
+        "build_plate": "",
+        "filament_used_g": 0,
+        "print_duration_hours": None,
+        "result_rating": 3,
+        "notes": "",
+        "printed_on": date.today().isoformat(),
+        "attachments": [],
+    }
+
+
+def resolve_profile_links(
+    session: Session,
+    material_id: int,
+    product_id: str,
+    printer_id: str,
+    printer_nozzle_id: str,
+    current_nozzle_id: int | None = None,
+) -> tuple[int, int | None, int | None, int | None]:
+    material_pk = material_id
+    product_pk = int(product_id) if clean_text(product_id) else None
+    printer_pk = int(printer_id) if clean_text(printer_id) else None
+    nozzle_pk = int(printer_nozzle_id) if clean_text(printer_nozzle_id) else None
+
+    if product_pk is not None:
+        product = session.get(FilamentProduct, product_pk)
+        if not product or not product.is_active:
+            raise HTTPException(status_code=404, detail="Spool not found")
+        material_pk = product.material_id
+    else:
+        material = session.scalar(select(Material).where(Material.id == material_pk, Material.is_active.is_(True)))
+        if not material:
+            raise HTTPException(status_code=404, detail="Material not found")
+
+    if printer_pk is not None:
+        printer = session.get(PrinterPreset, printer_pk)
+        if not printer or not printer.is_active:
+            raise HTTPException(status_code=404, detail="Printer not found")
+
+    if nozzle_pk is not None:
+        nozzle = session.get(PrinterNozzle, nozzle_pk)
+        if not nozzle:
+            raise HTTPException(status_code=404, detail="Nozzle not found")
+        if not nozzle.is_active and nozzle.id != current_nozzle_id:
+            raise HTTPException(status_code=400, detail="Retired nozzles cannot be selected for new print records.")
+        if printer_pk is not None and nozzle.printer_id != printer_pk:
+            raise HTTPException(status_code=400, detail="Selected nozzle does not belong to the selected printer.")
+        printer_pk = nozzle.printer_id
+
+    return material_pk, product_pk, printer_pk, nozzle_pk
+
+
+def add_profile_attachments(session: Session, profile: PrintProfile, attachments: list[UploadFile]) -> None:
+    for upload in attachments or []:
+        attachment = store_profile_attachment(upload, profile.id)
+        if attachment:
+            session.add(attachment)
+
+
+@app.get("/profiles/new")
+def new_profile_form(request: Request, material_id: int | None = None, session: Session = Depends(get_session)):
+    materials = list(
+        session.scalars(
+            select(Material)
+            .where(Material.is_active.is_(True))
+            .order_by(Material.family, Material.name)
+        )
+    )
+    return page(
+        request,
+        "profile_form.html",
+        page_name="inventory",
+        mode="create",
+        profile=blank_profile_payload(material_id),
+        materials=materials,
+        products=product_select_options(session),
+        printers=printer_select_options(session),
+        nozzles=[nozzle_option_payload(nozzle) for nozzle in nozzle_select_options(session)],
+    )
+
+
+@app.post("/profiles/new")
+def create_profile(
+    material_id: int = Form(...),
     profile_name: str = Form(...),
     product_id: str = Form(""),
     printer_id: str = Form(""),
+    printer_nozzle_id: str = Form(""),
     state: str = Form("Dry"),
     nozzle_diameter: float = Form(0.4),
     nozzle_temp: float = Form(0),
@@ -1474,33 +2588,89 @@ def add_profile(
     dryer_hours: float = Form(0),
     build_plate: str = Form(""),
     filament_used_g: float = Form(0),
+    print_duration_hours: str = Form(""),
     result_rating: int = Form(3),
     notes: str = Form(""),
     printed_on: str = Form(""),
+    attachments: list[UploadFile] = File(default=[]),
+    session: Session = Depends(get_session),
+):
+    material_pk, product_pk, printer_pk, nozzle_pk = resolve_profile_links(
+        session, material_id, product_id, printer_id, printer_nozzle_id
+    )
+    profile = PrintProfile(
+        material_id=material_pk,
+        product_id=product_pk,
+        printer_id=printer_pk,
+        printer_nozzle_id=nozzle_pk,
+        profile_name=profile_name.strip(),
+        state=state,
+        nozzle_diameter=nozzle_diameter,
+        nozzle_temp=nozzle_temp,
+        bed_temp=bed_temp,
+        chamber_temp=chamber_temp,
+        speed_mm_s=speed_mm_s,
+        dryer_temp=dryer_temp,
+        dryer_hours=dryer_hours,
+        build_plate=build_plate.strip(),
+        filament_used_g=max(0, filament_used_g),
+        print_duration_hours=parse_optional_nonnegative_float(print_duration_hours),
+        result_rating=max(1, min(5, result_rating)),
+        notes=notes.strip(),
+        printed_on=parse_form_date(printed_on, "Print date"),
+    )
+    session.add(profile)
+    session.flush()
+    add_profile_attachments(session, profile, attachments)
+    session.commit()
+    material = session.get(Material, profile.material_id)
+    return RedirectResponse(f"/materials/{material.slug}#profiles" if material else "/inventory#profiles", status_code=303)
+
+
+@app.post("/materials/{slug}/profiles")
+def add_profile(
+    slug: str,
+    profile_name: str = Form(...),
+    product_id: str = Form(""),
+    printer_id: str = Form(""),
+    printer_nozzle_id: str = Form(""),
+    state: str = Form("Dry"),
+    nozzle_diameter: float = Form(0.4),
+    nozzle_temp: float = Form(0),
+    bed_temp: float = Form(0),
+    chamber_temp: float = Form(0),
+    speed_mm_s: float = Form(0),
+    dryer_temp: float = Form(0),
+    dryer_hours: float = Form(0),
+    build_plate: str = Form(""),
+    filament_used_g: float = Form(0),
+    print_duration_hours: str = Form(""),
+    result_rating: int = Form(3),
+    notes: str = Form(""),
+    printed_on: str = Form(""),
+    attachments: list[UploadFile] = File(default=[]),
     session: Session = Depends(get_session),
 ):
     material = session.scalar(select(Material).where(Material.slug == slug))
     if not material:
         raise HTTPException(status_code=404, detail="Material not found")
-    product_pk = int(product_id) if clean_text(product_id) else None
-    printer_pk = int(printer_id) if clean_text(printer_id) else None
-    if product_pk is not None:
-        product = session.get(FilamentProduct, product_pk)
-        if not product or not product.is_active or product.material_id != material.id:
-            raise HTTPException(status_code=404, detail="Spool not found")
-    if printer_pk is not None:
-        printer = session.get(PrinterPreset, printer_pk)
-        if not printer or not printer.is_active:
-            raise HTTPException(status_code=404, detail="Printer preset not found")
+    material_pk, product_pk, printer_pk, nozzle_pk = resolve_profile_links(
+        session, material.id, product_id, printer_id, printer_nozzle_id
+    )
+    if material_pk != material.id:
+        raise HTTPException(status_code=400, detail="Selected spool belongs to a different material.")
     profile = PrintProfile(
-        material_id=material.id, product_id=product_pk, printer_id=printer_pk,
+        material_id=material.id, product_id=product_pk, printer_id=printer_pk, printer_nozzle_id=nozzle_pk,
         profile_name=profile_name.strip(), state=state,
         nozzle_diameter=nozzle_diameter, nozzle_temp=nozzle_temp, bed_temp=bed_temp, chamber_temp=chamber_temp,
         speed_mm_s=speed_mm_s, dryer_temp=dryer_temp, dryer_hours=dryer_hours, build_plate=build_plate.strip(),
-        filament_used_g=max(0, filament_used_g), result_rating=max(1, min(5, result_rating)),
+        filament_used_g=max(0, filament_used_g), print_duration_hours=parse_optional_nonnegative_float(print_duration_hours),
+        result_rating=max(1, min(5, result_rating)),
         notes=notes.strip(), printed_on=parse_form_date(printed_on, "Print date"),
     )
     session.add(profile)
+    session.flush()
+    add_profile_attachments(session, profile, attachments)
     session.commit()
     return RedirectResponse(f"/materials/{slug}#profiles", status_code=303)
 
@@ -1513,6 +2683,8 @@ def edit_profile_form(profile_id: int, request: Request, session: Session = Depe
             selectinload(PrintProfile.material),
             selectinload(PrintProfile.product),
             selectinload(PrintProfile.printer),
+            selectinload(PrintProfile.printer_nozzle),
+            selectinload(PrintProfile.attachments),
         )
         .where(PrintProfile.id == profile_id)
     )
@@ -1525,31 +2697,17 @@ def edit_profile_form(profile_id: int, request: Request, session: Session = Depe
             .order_by(Material.family, Material.name)
         )
     )
-    products = list(
-        session.scalars(
-            select(FilamentProduct)
-            .options(selectinload(FilamentProduct.material))
-            .where(FilamentProduct.is_active.is_(True))
-            .order_by(FilamentProduct.brand, FilamentProduct.product_name, FilamentProduct.id)
-        )
-    )
-    product_options = [
-        {
-            "id": product.id,
-            "material_id": product.material_id,
-            "label": f"{display_spool_code(product)} - {product.material.name} - {product.brand} {product.product_name}",
-        }
-        for product in products
-    ]
-    printers = active_printers(session)
     return page(
         request,
         "profile_form.html",
         page_name="inventory",
-        profile=profile,
+        mode="edit",
+        profile=profile_payload(profile),
+        profile_material_slug=profile.material.slug if profile.material else "",
         materials=materials,
-        products=product_options,
-        printers=printers,
+        products=product_select_options(session, profile.product_id),
+        printers=printer_select_options(session, profile.printer_id),
+        nozzles=[nozzle_option_payload(nozzle) for nozzle in nozzle_select_options(session, profile.printer_nozzle_id)],
     )
 
 
@@ -1560,6 +2718,7 @@ def update_profile(
     profile_name: str = Form(...),
     product_id: str = Form(""),
     printer_id: str = Form(""),
+    printer_nozzle_id: str = Form(""),
     state: str = Form("Dry"),
     nozzle_diameter: float = Form(0.4),
     nozzle_temp: float = Form(0),
@@ -1570,34 +2729,29 @@ def update_profile(
     dryer_hours: float = Form(0),
     build_plate: str = Form(""),
     filament_used_g: float = Form(0),
+    print_duration_hours: str = Form(""),
     result_rating: int = Form(3),
     notes: str = Form(""),
     printed_on: str = Form(""),
+    attachments: list[UploadFile] = File(default=[]),
     session: Session = Depends(get_session),
 ):
     profile = session.get(PrintProfile, profile_id)
     if not profile:
         raise HTTPException(status_code=404, detail="Print result not found")
-    product_pk = int(product_id) if clean_text(product_id) else None
-    printer_pk = int(printer_id) if clean_text(printer_id) else None
-    material_pk = material_id
-    if product_pk is not None:
-        product = session.get(FilamentProduct, product_pk)
-        if not product or not product.is_active:
-            raise HTTPException(status_code=404, detail="Spool not found")
-        material_pk = product.material_id
-    else:
-        material = session.scalar(select(Material).where(Material.id == material_pk, Material.is_active.is_(True)))
-        if not material:
-            raise HTTPException(status_code=404, detail="Material not found")
-    if printer_pk is not None:
-        printer = session.get(PrinterPreset, printer_pk)
-        if not printer or not printer.is_active:
-            raise HTTPException(status_code=404, detail="Printer preset not found")
+    material_pk, product_pk, printer_pk, nozzle_pk = resolve_profile_links(
+        session,
+        material_id,
+        product_id,
+        printer_id,
+        printer_nozzle_id,
+        current_nozzle_id=profile.printer_nozzle_id,
+    )
 
     profile.material_id = material_pk
     profile.product_id = product_pk
     profile.printer_id = printer_pk
+    profile.printer_nozzle_id = nozzle_pk
     profile.profile_name = profile_name.strip()
     profile.state = state
     profile.nozzle_diameter = nozzle_diameter
@@ -1609,9 +2763,12 @@ def update_profile(
     profile.dryer_hours = dryer_hours
     profile.build_plate = build_plate.strip()
     profile.filament_used_g = max(0, filament_used_g)
+    profile.print_duration_hours = parse_optional_nonnegative_float(print_duration_hours)
     profile.result_rating = max(1, min(5, result_rating))
     profile.notes = notes.strip()
     profile.printed_on = parse_form_date(printed_on, "Print date")
+    session.flush()
+    add_profile_attachments(session, profile, attachments)
     session.commit()
 
     material = session.get(Material, profile.material_id)
@@ -1622,15 +2779,50 @@ def update_profile(
 def delete_profile(profile_id: int, session: Session = Depends(get_session)):
     profile = session.scalar(
         select(PrintProfile)
-        .options(selectinload(PrintProfile.material))
+        .options(selectinload(PrintProfile.material), selectinload(PrintProfile.attachments))
         .where(PrintProfile.id == profile_id)
     )
     if not profile:
         raise HTTPException(status_code=404, detail="Print result not found")
     material_slug = profile.material.slug if profile.material else ""
+    attachment_paths = [attachment.stored_relative_path for attachment in profile.attachments]
     session.delete(profile)
     session.commit()
+    for relative_path in attachment_paths:
+        delete_stored_upload(relative_path)
     return RedirectResponse(f"/materials/{material_slug}#profiles" if material_slug else "/inventory", status_code=303)
+
+
+@app.get("/attachments/{attachment_id}/download")
+def download_attachment(attachment_id: int, session: Session = Depends(get_session)):
+    attachment = session.get(PrintAttachment, attachment_id)
+    if not attachment:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    target = stored_upload_path(attachment.stored_relative_path)
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail="Attachment file is missing")
+    return FileResponse(
+        target,
+        media_type=attachment.mime_type or "application/octet-stream",
+        filename=attachment.original_filename,
+    )
+
+
+@app.post("/attachments/{attachment_id}/delete")
+def delete_attachment(
+    attachment_id: int,
+    return_to: str = Form(""),
+    session: Session = Depends(get_session),
+):
+    attachment = session.get(PrintAttachment, attachment_id)
+    if not attachment:
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    profile_id = attachment.print_profile_id
+    relative_path = attachment.stored_relative_path
+    session.delete(attachment)
+    session.commit()
+    delete_stored_upload(relative_path)
+    return RedirectResponse(return_to or f"/profiles/{profile_id}/edit", status_code=303)
 
 
 @app.get("/guide")
@@ -1689,6 +2881,8 @@ def inventory_page(request: Request, session: Session = Depends(get_session)):
                 selectinload(PrintProfile.material),
                 selectinload(PrintProfile.product),
                 selectinload(PrintProfile.printer),
+                selectinload(PrintProfile.printer_nozzle),
+                selectinload(PrintProfile.attachments),
             )
             .order_by(PrintProfile.printed_on.desc(), PrintProfile.id.desc())
         )
@@ -1711,6 +2905,7 @@ def inventory_page(request: Request, session: Session = Depends(get_session)):
             "archived_spools": len(archived_products_payload),
             "remaining_g": sum(product["remaining_g"] for product in active_products_payload),
             "used_g": sum(product["filament_used_g"] for product in active_products_payload),
+            "low_stock": sum(1 for product in active_products_payload if product["remaining_percent"] <= 20),
             "print_results": len(profiles),
         },
     )
@@ -1795,6 +2990,7 @@ def api_calculate(
     purge_g: float = 0,
     waste_percent: float = 0,
     used_g: float | None = None,
+    support_g: float = 0,
     energy_kwh: float = 0,
     electricity_eur_kwh: float = 0,
     session: Session = Depends(get_session),
@@ -1810,15 +3006,17 @@ def api_calculate(
     density = float(props.get("density_g_cm3", 1.0))
     if used_g is not None and used_g > 0:
         raw_part_g = max(0, used_g)
-        raw_support_g = 0
-        total_g = raw_part_g
-        purge_mass_g = 0
+        raw_support_g = max(0, support_g)
+        purge_mass_g = max(0, purge_g)
+        before_waste_g = raw_part_g + raw_support_g + purge_mass_g
+        total_g = before_waste_g * (1 + max(0, waste_percent) / 100)
     else:
         raw_part_g = max(0, model_volume_mm3) * density / 1000
         raw_support_g = max(0, support_volume_mm3) * density / 1000
         purge_mass_g = max(0, purge_g)
         before_waste_g = raw_part_g + raw_support_g + purge_mass_g
         total_g = before_waste_g * (1 + max(0, waste_percent) / 100)
+    waste_mass_g = max(0, total_g - before_waste_g)
     _, price_per_kg, _ = product_price(product)
     material_cost = (total_g / 1000 * price_per_kg) if price_per_kg is not None else None
     energy_cost = max(0, energy_kwh) * max(0, electricity_eur_kwh)
@@ -1829,6 +3027,7 @@ def api_calculate(
         "part_mass_g": round(raw_part_g, 2),
         "support_mass_g": round(raw_support_g, 2),
         "purge_mass_g": round(purge_mass_g, 2),
+        "waste_mass_g": round(waste_mass_g, 2),
         "total_mass_g": round(total_g, 2),
         "price_per_kg": round(price_per_kg, 2) if price_per_kg is not None else None,
         "material_cost_eur": round(material_cost, 2) if material_cost is not None else None,
@@ -1845,6 +3044,8 @@ def api_export(session: Session = Depends(get_session)):
             select(PrintProfile).options(
                 selectinload(PrintProfile.product),
                 selectinload(PrintProfile.printer),
+                selectinload(PrintProfile.printer_nozzle),
+                selectinload(PrintProfile.attachments),
             )
         ).all()
     )

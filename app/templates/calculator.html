@@ -1,40 +1,48 @@
 {% extends "base.html" %}
-{% block title %}Material Lab — Cost Calculator{% endblock %}
+{% block title %}Material Lab - Cost Calculator{% endblock %}
 {% block content %}
-<section class="page-hero compact">
-  <div><span class="eyebrow">COST CALCULATOR</span><h1>Calculate from the real spool you actually buy.</h1><p>Choose a tracked manufacturer / supplier entry. The calculator pulls that spool’s latest €/kg price and the material density automatically.</p></div>
+<section class="page-header">
+  <div>
+    <span class="eyebrow">WORKSHOP</span>
+    <h1>Cost Calculator</h1>
+    <p>Estimate filament, support, waste, and energy cost from a tracked spool.</p>
+  </div>
 </section>
 
 <section class="calculator-layout">
   <form id="calculator-form" class="panel calculator-form">
-    <div class="panel-title"><span class="eyebrow">PRINT INPUTS</span><h2>Part, support and waste</h2></div>
-    <label class="span-all">Exact filament product<select required id="calc-product" name="product_id">{% for product in products %}<option value="{{ product.id }}">{{ product.material_name }} — {{ product.brand }} {{ product.product_name }}{% if product.price_per_kg %} · €{{ '%.2f'|format(product.price_per_kg) }}/kg{% else %} · no price yet{% endif %}</option>{% endfor %}</select></label>
-    <div class="calculator-product-info" id="calculator-product-info">Choose a spool to see density and tracked €/kg.</div>
-    <div class="calculator-mode span-all" role="radiogroup" aria-label="Calculation mode">
-      <label><input type="radio" name="calc_mode" value="volume" checked> From slicer volume</label>
-      <label><input type="radio" name="calc_mode" value="grams"> From used grams</label>
+    <div class="panel-title"><span class="eyebrow">INPUTS</span><h2>Spool and material use</h2></div>
+    <label class="span-all">Exact spool / product<select required id="calc-product" name="product_id">{% for product in products %}<option value="{{ product.id }}">{{ product.material_name }} - {{ product.brand }} {{ product.product_name }}{% if product.price_per_kg %} / &euro;{{ '%.2f'|format(product.price_per_kg) }}/kg{% else %} / no price yet{% endif %}</option>{% endfor %}</select></label>
+    <div class="calculator-product-info" id="calculator-product-info">Choose a spool to see density, tracked price, and remaining mass.</div>
+    <div class="calculator-mode span-all" role="radiogroup" aria-label="Calculation method">
+      <label><input type="radio" name="calc_mode" value="grams" checked> From used grams</label>
+      <label><input type="radio" name="calc_mode" value="volume"> From model volume</label>
     </div>
-    <label data-calc-volume>Model volume (mm³)<input required type="number" id="calc-model-volume" name="model_volume_mm3" min="0" step="1" value="100000"></label>
-    <label data-calc-volume>Support volume (mm³)<input type="number" id="calc-support-volume" name="support_volume_mm3" min="0" step="1" value="0"></label>
-    <label data-calc-volume>Purge / prime material (g)<input type="number" id="calc-purge" name="purge_g" min="0" step="0.1" value="0"></label>
-    <label data-calc-volume>Waste allowance (%)<input type="number" id="calc-waste" name="waste_percent" min="0" step="1" value="3"></label>
-    <label class="span-all" data-calc-grams hidden>Filament used (g)<input type="number" id="calc-used-g" name="used_g" min="0" step="0.1" placeholder="150.0" disabled></label>
+    <label data-calc-grams>Part filament used (g)<input type="number" id="calc-used-g" name="used_g" min="0" step="0.1" placeholder="150.0"></label>
+    <label data-calc-grams>Support filament (g)<input type="number" id="calc-support-g" name="support_g" min="0" step="0.1" value="0"></label>
+    <label data-calc-volume hidden>Model volume (mm3)<input type="number" id="calc-model-volume" name="model_volume_mm3" min="0" step="1" value="100000" disabled></label>
+    <label data-calc-volume hidden>Support volume (mm3)<input type="number" id="calc-support-volume" name="support_volume_mm3" min="0" step="1" value="0" disabled></label>
+    <label>Purge / prime material (g)<input type="number" id="calc-purge" name="purge_g" min="0" step="0.1" value="0"></label>
+    <label>Waste allowance (%)<input type="number" id="calc-waste" name="waste_percent" min="0" step="1" value="3"></label>
     <label>Printer energy (kWh)<input type="number" id="calc-energy" name="energy_kwh" min="0" step="0.01" value="0"></label>
-    <label>Electricity (€/kWh)<input type="number" id="calc-electricity" name="electricity_eur_kwh" min="0" step="0.01" value="0.30"></label>
-    <button class="button primary span-all" type="submit">Calculate realistic material cost →</button>
+    <label>Electricity (&euro;/kWh)<input type="number" id="calc-electricity" name="electricity_eur_kwh" min="0" step="0.01" value="0.30"></label>
+    <button class="button primary span-all" type="submit">Calculate cost</button>
   </form>
 
-  <section class="calculator-results">
-    <article class="result-hero"><span>Estimated total</span><strong id="result-total">€—</strong><p id="result-product">Choose a product, then calculate.</p></article>
-    <div class="result-grid">
-      <article><span>Model mass</span><b id="result-part">—</b></article>
-      <article><span>Support mass</span><b id="result-support">—</b></article>
-      <article><span>Total filament</span><b id="result-total-mass">—</b></article>
-      <article><span>Spool price</span><b id="result-price-per-kg">—</b></article>
-      <article><span>Filament cost</span><b id="result-material-cost">—</b></article>
-      <article><span>Energy cost</span><b id="result-energy-cost">—</b></article>
-    </div>
-    <article class="calculator-note"><strong>What this includes:</strong> part plastic, supports, purge and your waste percentage. Bambu Studio remains the final check for exact purge paths, supports, brim and infill.</article>
+  <section class="calculator-results panel">
+    <div class="panel-title"><span class="eyebrow">RESULT</span><h2>Cost breakdown</h2><p>This is an estimate only. It does not record spool usage.</p></div>
+    <article class="result-total"><span>Estimated total</span><strong id="result-total">&euro;-</strong><p id="result-product">Choose a product, then calculate.</p></article>
+    <dl class="breakdown-list">
+      <div><dt>Part mass</dt><dd id="result-part">-</dd></div>
+      <div><dt>Support mass</dt><dd id="result-support">-</dd></div>
+      <div><dt>Purge / prime</dt><dd id="result-purge">-</dd></div>
+      <div><dt>Waste allowance</dt><dd id="result-waste">-</dd></div>
+      <div><dt>Total filament</dt><dd id="result-total-mass">-</dd></div>
+      <div><dt>Spool price</dt><dd id="result-price-per-kg">-</dd></div>
+      <div><dt>Filament cost</dt><dd id="result-material-cost">-</dd></div>
+      <div><dt>Energy cost</dt><dd id="result-energy-cost">-</dd></div>
+    </dl>
+    <p class="calculator-note" id="result-remaining-note">Remaining mass preview appears after calculation when the selected spool has a saved mass.</p>
   </section>
 </section>
 

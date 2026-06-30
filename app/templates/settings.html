@@ -1,13 +1,54 @@
 {% extends "base.html" %}
-{% block title %}Material Lab — Settings{% endblock %}
+{% block title %}Material Lab - Settings{% endblock %}
 {% block content %}
-<section class="page-hero compact"><div><span class="eyebrow">SYSTEM & DATA</span><h1>Your lab stays yours.</h1><p>Material Lab uses a local SQLite database. No account, cloud service or tracking is required for normal operation.</p></div></section>
-<section class="settings-grid">
-  <article class="panel"><div class="panel-title"><span class="eyebrow">DATABASE</span><h2>Local data store</h2></div><dl class="info-list"><div><dt>Data folder</dt><dd>{{ data_dir }}</dd></div><div><dt>Database</dt><dd>{{ db_path }}</dd></div><div><dt>Material records</dt><dd>{{ material_count }}</dd></div><div><dt>Tracked spool products</dt><dd>{{ product_count }}</dd></div></dl></article>
-  <article class="panel"><div class="panel-title"><span class="eyebrow">BACKUP & PORTABILITY</span><h2>Do not lose your testing history.</h2></div><p class="body-copy">Export a readable JSON snapshot before major changes. A SQLite backup stays inside the persistent data folder and is convenient for fast restores.</p><div class="stack-actions"><a class="button primary" href="/api/export">Download JSON export</a><button class="button secondary" id="backup-button">Create SQLite backup</button></div><p class="backup-status" id="backup-status"></p></article>
-  <article class="panel" id="printers"><div class="panel-title"><span class="eyebrow">PRINTERS</span><h2>Printer presets</h2></div><div class="printer-list">{% for printer in printers %}<div class="printer-row"><strong>{{ printer.name }}</strong><span>{{ printer.nozzle_max_c|int }} °C nozzle · {{ printer.bed_max_c|int }} °C bed{% if printer.enclosed %} · enclosed{% endif %}{% if printer.ams_capable %} · AMS{% endif %}</span></div>{% else %}<p class="body-copy">No printer presets saved yet.</p>{% endfor %}</div><form action="/settings/printers" method="post" class="form-grid printer-form"><label>Name<input required name="name" placeholder="Voron / Prusa / custom printer"></label><label>Max nozzle °C<input required type="number" name="nozzle_max_c" value="300"></label><label>Max bed °C<input required type="number" name="bed_max_c" value="100"></label><label class="check-label"><input type="checkbox" name="enclosed"> Enclosed / heated chamber capable</label><label class="check-label"><input type="checkbox" name="direct_drive" checked> Direct-drive path</label><label class="check-label"><input type="checkbox" name="supports_flexible" checked> Flexible materials OK</label><label class="check-label"><input type="checkbox" name="ams_capable"> AMS / multi-spool capable</label><label class="span-all">Notes<textarea name="notes" placeholder="Nozzle type, enclosure, limitations, feed path notes..."></textarea></label><div class="form-actions span-all"><button class="button secondary" type="submit">Add printer preset</button></div></form></article>
-  <article class="panel"><div class="panel-title"><span class="eyebrow">EXPAND THE LIBRARY</span><h2>Add anything later.</h2></div><p class="body-copy">New materials use normal fields for the common values, with an advanced JSON section kept for specialised data like thermal conductivity, ESD behaviour, dielectric strength, annealing profile or certification notes.</p><a class="button secondary" href="/materials/new">＋ Create material record</a></article>
-  <article class="panel"><div class="panel-title"><span class="eyebrow">LIVE PRICES</span><h2>Manual first. Connectors later.</h2></div><p class="body-copy">Keep a supplier URL and price history for every exact spool. Shop scraping is intentionally not active in v1 because suppliers redesign pages, block automation and use region-specific prices. Add purpose-built connectors only for the shops you actually use.</p></article>
+<section class="page-header">
+  <div>
+    <span class="eyebrow">SYSTEM</span>
+    <h1>Settings</h1>
+    <p>Printers, backups, exports, and local data.</p>
+  </div>
 </section>
-<script>document.getElementById('backup-button')?.addEventListener('click', async () => { const target=document.getElementById('backup-status'); target.textContent='Creating backup…'; const r=await fetch('/api/backup',{method:'POST'}); const j=await r.json(); target.textContent=j.ok ? `Backup created: ${j.backup}` : 'Backup failed.'; });</script>
+
+<section class="settings-grid">
+  <article class="panel">
+    <div class="panel-title"><span class="eyebrow">LOCAL DATA</span><h2>Database</h2></div>
+    <dl class="info-list">
+      <div><dt>Data folder</dt><dd>{{ data_dir }}</dd></div>
+      <div><dt>Database</dt><dd>{{ db_path }}</dd></div>
+      <div><dt>Material records</dt><dd>{{ material_count }}</dd></div>
+      <div><dt>Tracked spool products</dt><dd>{{ product_count }}</dd></div>
+    </dl>
+  </article>
+
+  <article class="panel">
+    <div class="panel-title"><span class="eyebrow">BACKUPS AND EXPORT</span><h2>Portable snapshots</h2></div>
+    <p class="body-copy">Export JSON for inspection or create a SQLite backup inside the persistent data folder before major changes.</p>
+    <div class="stack-actions"><a class="button primary" href="/api/export">Download JSON export</a><button class="button secondary" id="backup-button">Create SQLite backup</button></div>
+    <p class="backup-status" id="backup-status"></p>
+  </article>
+
+  <article class="panel" id="printers">
+    <div class="panel-title"><span class="eyebrow">PRINTERS</span><h2>Saved printers</h2></div>
+    <div class="printer-list">
+      {% for printer in printers %}
+        <div class="printer-row"><strong>{{ printer.name }}</strong><span>{{ printer.nozzle_max_c|int }} &deg;C nozzle / {{ printer.bed_max_c|int }} &deg;C bed{% if printer.chamber_max_c %} / {{ printer.chamber_max_c|int }} &deg;C chamber{% endif %}</span></div>
+      {% else %}
+        <p class="body-copy">No printers saved yet.</p>
+      {% endfor %}
+    </div>
+    <div class="stack-actions"><a class="button primary" href="/printers">Manage printers</a><a class="button secondary" href="/printers/new">Add printer</a></div>
+  </article>
+
+  <article class="panel">
+    <div class="panel-title"><span class="eyebrow">MATERIAL RECORDS</span><h2>Library management</h2></div>
+    <p class="body-copy">Create local material records for exact data you want to maintain yourself.</p>
+    <a class="button secondary" href="/materials/new">Create material record</a>
+  </article>
+
+  <article class="panel">
+    <div class="panel-title"><span class="eyebrow">PRICE TRACKING</span><h2>Manual supplier history</h2></div>
+    <p class="body-copy">Each exact spool can store supplier URL and price history. Add prices from the spool or material page.</p>
+  </article>
+</section>
+<script>document.getElementById('backup-button')?.addEventListener('click', async () => { const target=document.getElementById('backup-status'); target.textContent='Creating backup...'; const r=await fetch('/api/backup',{method:'POST'}); const j=await r.json(); target.textContent=j.ok ? `Backup created: ${j.backup}` : 'Backup failed.'; });</script>
 {% endblock %}

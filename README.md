@@ -1,90 +1,119 @@
 # Material Lab
 
-Material Lab is a private, local-first material and filament management app for 3D printing.
-It stores material data, exact products, spool prices, printer presets, print profiles, personal results, source notes, and engineering trade-offs in one place.
+Material Lab is a private, local-first web app for managing 3D-printing materials, filaments, spools, printer presets, print profiles, prices, and personal print results.
 
-It exists because "I think this filament is probably fine" is not a process. It is a mood with a nozzle temperature.
+It is designed as a practical workshop tool: one place to compare material families, track exact products, record what worked on a specific printer, and make better material choices before buying or printing.
+
+## Purpose
+
+Material Lab helps with tasks such as:
+
+* comparing polymer families and filament variants;
+* tracking exact supplier products, spool prices, and availability;
+* assigning and managing spool inventory numbers;
+* storing printer compatibility and recommended print settings;
+* recording personal print results, failures, and notes;
+* keeping manufacturer sources and evidence beside technical values;
+* comparing engineering trade-offs such as heat resistance, stiffness, strength, moisture sensitivity, and cost;
+* building shortlists for a specific use case or print requirement.
+
+The app is intended for personal use, a home workshop, or a small lab environment.
 
 ## Current Status
 
-This project is usable as a local workshop app, but it is not a polished public SaaS product and it is not a certified engineering database.
+Material Lab is functional as a local workshop application.
 
-Use it for:
+It is not intended to be a public SaaS product, a certified engineering database, or a replacement for manufacturer documentation.
 
-- comparing polymer families and filament variants;
-- tracking exact supplier products and spool prices;
-- assigning inventory-style spool numbers;
-- storing printer compatibility and print settings;
-- recording personal print results;
-- keeping source/evidence notes beside real material values;
-- making better shortlists before buying material.
+Use the app as a structured decision and documentation tool. For critical parts, always verify the exact manufacturer data sheet for the exact filament product and test the final printed part under realistic conditions.
 
-Do not use it as:
+## Main Features
 
-- a certified design-allowables database;
-- a public internet service without authentication;
-- a replacement for the exact manufacturer TDS for the exact spool/product you buy;
-- an excuse to skip testing a loaded printed part.
+* Material Library with search, filters, printer compatibility, polymer-family information, and engineering values.
+* Material Guide with requirement scoring and filtering for material properties such as temperature resistance, price, tensile strength, stiffness, and printability.
+* Compare page with material selection, family grouping, real-value and score-based comparison modes, bar charts, radar charts, and trade-off maps.
+* Material detail pages with technical values, chemistry information, evidence sources, confidence indicators, readiness checklists, exact products, spool tracking, price history, and print profiles.
+* Inventory page for tracking exact filament products, spool quantities, supplier pricing, printer history, and repeat-purchase decisions.
+* Calculator for estimating filament cost, mass, volume, support material, purge material, waste, and optional electricity cost.
+* Settings page for printer presets, exports, database backups, and local data configuration.
+* V2 material preview routes for the newer evidence-first material data model.
 
-## How The App Works
+## Technical Stack
 
-Material Lab is a FastAPI web app with Jinja templates, SQLAlchemy models, SQLite storage, vanilla JavaScript, and custom CSS.
+Material Lab is built with:
 
-At startup the app:
+* FastAPI
+* Jinja templates
+* SQLAlchemy
+* SQLite
+* Vanilla JavaScript
+* Custom CSS
+
+Most pages are server-rendered HTML. JavaScript is used for interactive filtering, comparison tools, guide ranking, charts, toggles, and small workflow helpers.
+
+## How the App Starts
+
+When the app starts, it:
 
 1. opens the configured SQLite database;
-2. creates missing tables with SQLAlchemy;
-3. seeds default materials and printer presets without intentionally wiping your existing records;
-4. serves local pages such as Material Library, Material Guide, Compare, Inventory, Calculator, Settings, and the V2 material preview routes.
+2. creates missing tables through SQLAlchemy;
+3. seeds default material data and printer presets without intentionally removing existing records;
+4. serves the local application pages.
 
-The browser UI talks to the same local FastAPI app. Most pages are normal server-rendered HTML, with JavaScript used for interactive filtering, comparison charts, guide ranking, toggles, and small workflow helpers.
+The main sections include Material Library, Material Guide, Compare, Inventory, Calculator, Settings, and V2 material preview routes.
 
-## Where Your Data Is Saved
+## Data Storage
 
-SQLite is the source of truth.
+SQLite is the source of truth for the app.
 
-On a normal local Python run, the default database path is:
+For a normal local Python installation, the default database location is:
 
 ```text
 app/data/material_lab.sqlite3
 ```
 
-When running with Docker Compose, the container sets `MATERIAL_LAB_DATA_DIR=/data`, and the host folder is:
+When using Docker Compose, the container uses:
+
+```text
+MATERIAL_LAB_DATA_DIR=/data
+```
+
+The persistent database on the host is stored at:
 
 ```text
 ./data/material_lab.sqlite3
 ```
 
-You can override the data location with:
+You can set a custom data directory with:
 
 ```text
 MATERIAL_LAB_DATA_DIR=/path/to/your/data
 ```
 
-The repository is configured to ignore private data folders and SQLite files. That means your app code can go to GitHub, while your personal material notes, prices, spools, and print results stay local.
+The repository is configured so that private data folders and SQLite databases can remain outside Git. This allows the application code and documentation to be version-controlled while personal prices, spool records, notes, and print results stay local.
 
-Still, do backups. SQLite is reliable; human confidence is the part that usually needs supervision.
+## Backups
 
-## Backup
+Use the Settings page to create:
 
-Use Settings in the app for:
+* JSON exports;
+* SQLite backups.
 
-- JSON export;
-- SQLite backup.
+Before a significant update, also make a manual copy of the persistent data folder.
 
-Also copy the persistent data folder before any serious update:
+For a local Python installation:
 
 ```text
 app/data/
 ```
 
-or, for Docker Compose:
+For Docker Compose:
 
 ```text
 data/
 ```
 
-If you run this on a Raspberry Pi, back up the Pi `data` folder before deploying changes. Do not delete it unless you are deliberately resetting the app.
+When running Material Lab on a Raspberry Pi, back up the `data` folder before deploying updates. Do not delete the folder unless you intentionally want to reset the application database.
 
 ## Local Development
 
@@ -96,92 +125,92 @@ python -m venv .venv
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
 ```
 
-Open:
+Open the application in your browser:
 
 ```text
 http://127.0.0.1:8000
 ```
 
-Use port 8000 for local development. The Raspberry Pi Docker setup uses port 8080, so do not confuse the two and accidentally celebrate against the wrong app.
+Port `8000` is intended for local development.
 
 ## Raspberry Pi Deployment
 
-Pushing to GitHub does not automatically update the Raspberry Pi. Git is not a teleportation device, despite how confidently developers stare at terminals.
+The Raspberry Pi deployment uses Docker Compose and normally exposes the app on port `8080`.
 
-The Pi only changes when you intentionally update it, for example by pulling/copying the reviewed code on the Pi and rebuilding the Docker Compose app. See:
+Pushing changes to GitHub does not automatically update the Raspberry Pi. The Pi must be updated deliberately by pulling or copying the reviewed code and rebuilding the Docker Compose application.
+
+Deployment instructions are available in:
 
 ```text
 docs/DEPLOY_ON_PI.md
 ```
 
-Before doing that:
+Before deploying changes:
 
-1. test locally;
-2. review `git diff`;
-3. back up the Pi database;
-4. deploy only when you are comfortable with the exact changes.
+1. test the changes locally;
+2. review the Git diff;
+3. back up the Raspberry Pi database;
+4. deploy only the changes you have reviewed.
 
-## Is It Ready To Push?
+## Git and Private Data
 
-It can be ready to push to a private Git repository after review, but pushing should only store source code and docs.
-
-Before pushing, check:
+Before pushing changes to a repository, check:
 
 ```powershell
 git diff --check
 git status
 ```
 
-Make sure these are not staged or committed:
+Do not stage or commit private data such as:
 
-- `data/`
-- `app/data/`
-- `backups/`
-- `uploads/`
-- `*.sqlite`
-- `*.sqlite3`
-- `.env`
+* `data/`
+* `app/data/`
+* `backups/`
+* `uploads/`
+* `*.sqlite`
+* `*.sqlite3`
+* `.env`
 
-Do not push straight to production from excitement. Excitement is useful for motivation, not release management.
+The source code and documentation can be stored in Git, while personal workshop data should remain local and be backed up separately.
 
-## Safety And Privacy
+## Privacy and Security
 
-Material Lab is local-first. It does not need an account or cloud service for normal operation.
+Material Lab is designed to run locally and does not require an account or cloud service for normal use.
 
-That does not make it magically secure.
+For safer operation:
 
-Safer use:
+* run it on a local PC or Raspberry Pi inside your home network;
+* use Tailscale or an authenticated reverse proxy for remote access;
+* keep the SQLite database outside Git;
+* create backups before updates;
+* treat source links, prices, notes, and print results as private data.
 
-- run it on your PC or Raspberry Pi inside your home network;
-- use Tailscale or a reverse proxy with authentication for remote access;
-- keep the SQLite database out of Git;
-- back up before updates;
-- treat source URLs, prices, notes, and print results as private workshop data.
+Avoid directly exposing the app to the public internet through port forwarding without proper authentication and access controls.
 
-Unsafe use:
+## Engineering Data Disclaimer
 
-- port-forwarding the app directly to the internet;
-- committing the SQLite database;
-- deploying unreviewed migrations to the Pi;
-- assuming approximate catalog values are manufacturer-certified data.
+The seeded catalog data and material values are intended for comparison, planning, and material selection.
 
-## Implemented Features
+They are not certified design allowables.
 
-- Material Library with search, quick filters, printer/path compatibility, real engineering values, and family/variant cards.
-- Material Guide with requirement scoring, printer/path filtering, and advanced real-value filters for heat, price, tensile strength, and stiffness.
-- Compare page with family grouping, selectable materials, score/real-value modes, bar charts, radar profile, and trade-off map controls.
-- Material detail pages with real values, score orientation, chemistry display, source/evidence drawers, confidence strip, readiness checklist, spool workflow, products, price history, and print profiles.
-- Inventory page for exact products, spool-style tracking, supplier prices, printer/profile history, and "buy again" decisions.
-- Calculator for real product price, mass/volume, supports, purge, waste, and optional energy cost.
-- Settings page for local database location, backups, exports, and printer presets.
-- V2 material preview routes for the newer evidence-first data model.
+Actual performance can vary depending on:
 
-## Engineering Warning
+* manufacturer and product grade;
+* color and filler content;
+* filament drying;
+* nozzle type and nozzle temperature;
+* chamber temperature;
+* print orientation;
+* layer height and wall structure;
+* annealing;
+* part geometry;
+* print settings;
+* environmental conditions.
 
-The seeded and catalog values are useful for selection, comparison, and planning. They are not certified design values.
-
-Exact performance changes with manufacturer, grade, color, filler content, drying, print orientation, nozzle, chamber, annealing, and the specific part geometry. For a critical part, confirm the exact product TDS and test the final printed design.
+For a loaded, safety-relevant, heat-critical, or long-term functional part, confirm the exact product technical data sheet and test the final printed part.
 
 ## Home Assistant
 
-For a normal Raspberry Pi Docker host, use Docker Compose. If you run Home Assistant OS and deliberately want this inside the Supervisor, the `home-assistant-addon/` folder is a starter local-app package. Read its README first. Docker Compose is the simpler route when you have a standard Debian/Pi host.
+For a normal Raspberry Pi running Debian or another standard Linux distribution, Docker Compose is the recommended deployment method.
+
+The `home-assistant-addon/` folder contains a starter package for users who intentionally want to run Material Lab inside Home Assistant Supervisor. Read the add-on documentation before using that route.

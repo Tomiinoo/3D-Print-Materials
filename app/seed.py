@@ -6,10 +6,10 @@ from datetime import date
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .models import FilamentProduct, Material, PriceEntry
+from .models import FilamentProduct, Material, PriceEntry, PrinterPreset
 
 
-SOURCE_X2D = "X2D technical specifications and filament compatibility guidance (Bambu Lab)."
+SOURCE_PRINTER = "Prototype printer compatibility guidance."
 SOURCE_DRY = "Drying values are starting guidance; use the exact spool technical data sheet for a critical part."
 
 
@@ -25,6 +25,51 @@ def settings(nozzle, bed, chamber, drying, speed, nozzle_size="0.4 mm TC", main=
         "aux_compatible": aux,
         "cooling": cooling,
     }
+
+
+def seed_printer_presets(session: Session) -> None:
+    defaults = [
+        {
+            "slug": "bambu-a1-mini",
+            "name": "Bambu A1 mini",
+            "nozzle_max_c": 300,
+            "bed_max_c": 80,
+            "enclosed": False,
+            "direct_drive": True,
+            "supports_flexible": True,
+            "ams_capable": True,
+            "notes": "Open-frame starter preset. Use the exact printer setup and installed nozzle as the final check.",
+        },
+        {
+            "slug": "ankermake-m5c",
+            "name": "AnkerMake M5C",
+            "nozzle_max_c": 300,
+            "bed_max_c": 100,
+            "enclosed": False,
+            "direct_drive": True,
+            "supports_flexible": True,
+            "ams_capable": False,
+            "notes": "Open-frame starter preset. Treat enclosure-sensitive materials as a manual review.",
+        },
+        {
+            "slug": "generic-enclosed-300c",
+            "name": "Generic enclosed 300 C printer",
+            "nozzle_max_c": 300,
+            "bed_max_c": 110,
+            "enclosed": True,
+            "direct_drive": True,
+            "supports_flexible": True,
+            "ams_capable": False,
+            "notes": "Editable generic preset for enclosed engineering printers.",
+        },
+    ]
+
+    for data in defaults:
+        if session.scalar(select(PrinterPreset.id).where(PrinterPreset.slug == data["slug"])):
+            continue
+        session.add(PrinterPreset(**data))
+
+    session.commit()
 
 
 def properties(
@@ -124,7 +169,7 @@ def seed_materials(session: Session) -> None:
         dict(
             slug="abs", name="ABS", full_name="Acrylonitrile butadiene styrene", family="Styrenic", subfamily="Base polymer", family_color="#ef476f",
             formula="ABS terpolymer", repeat_unit="[styrene-co-acrylonitrile-co-butadiene]ₙ",
-            description="Classic tough engineering plastic. In an actively heated X2D chamber it becomes a very practical inexpensive functional material.",
+            description="Classic tough engineering plastic. In an actively heated chamber it becomes a very practical inexpensive functional material.",
             best_for="Enclosures, functional workshop parts, moderate-heat brackets, impact-tolerant assemblies.", avoid_for="Outdoor UV exposure, poorly ventilated rooms, very large unsupported flat parts.",
             settings=settings("250–270 °C", "90–100 °C", "50–65 °C", "75–85 °C · 6–8 h", "40–180 mm/s", "0.4 mm TC", True, True, "Low to moderate fan"),
             properties=properties(1.05, 87, 80, 4, 7, 2, 5, 2, 5, score(5,6,5,6,8,5,5,7,6,6,5,2,3), tensile="35–45 MPa", modulus="2.0–2.3 GPa", impact="Good impact tolerance", shrinkage="Moderate to high"),
@@ -188,7 +233,7 @@ def seed_materials(session: Session) -> None:
         dict(
             slug="paht-cf", name="PAHT-CF", full_name="High-temperature carbon-fibre-reinforced polyamide", family="Polyamide", subfamily="High-temperature CF", family_color="#06a77d",
             formula="High-temperature polyamide + carbon fibre", repeat_unit="[—NH—R—C(=O)—]ₙ + CF",
-            description="One of the best balanced high-performance X2D materials: stiff, strong and heat resistant with manageable warping when properly dried.",
+            description="One of the best balanced high-performance materials: stiff, strong and heat resistant with manageable warping when properly dried.",
             best_for="High-temperature machine brackets, tooling, automotive-style technical parts, stiff load-bearing assemblies.", avoid_for="Impact bumpers, wet storage, casual fast printing without temperature control.",
             settings=settings("280–300 °C", "80–100 °C", "55–65 °C", "75–85 °C · 8–12 h", "25–100 mm/s", "0.6 mm TC preferred", True, False, "Low fan"),
             properties=properties(1.06, 194, 150, 9, 7, 2, 8, 4, 9, score(9,8,6,4,3,9,8,7,1,4,9,4,9), score(7,6,5,3,2,8,8,7,0,2,8,4,9), tensile="~92 MPa dry", modulus="~4.23 GPa", impact="Structural, not a bumper material", shrinkage="Low for a high-temperature nylon"),
@@ -196,7 +241,7 @@ def seed_materials(session: Session) -> None:
         dict(
             slug="pet-cf", name="PET-CF", full_name="Carbon-fibre-reinforced polyethylene terephthalate", family="Polyester composite", subfamily="Carbon fibre", family_color="#43aa8b",
             formula="PET + chopped carbon fibre", repeat_unit="[—O—CH₂—CH₂—O—C(=O)—C₆H₄—C(=O)—]ₙ + CF",
-            description="High-HDT, stiff polyester composite with very good dimensional stability and chemical resistance for a high-performance X2D part.",
+            description="High-HDT, stiff polyester composite with very good dimensional stability and chemical resistance for a high-performance part.",
             best_for="High-heat fixtures, precision technical parts, chemically exposed structural brackets.", avoid_for="High-impact parts, relaxed moisture handling, small 0.4 mm fibre-heavy details.",
             settings=settings("280–300 °C", "80–100 °C", "55–65 °C", "75–85 °C · 8–12 h", "25–90 mm/s", "0.6 mm TC preferred", True, False, "Low fan"),
             properties=properties(1.29, 205, 165, 7, 8, 2, 8, 6, 9, score(9,8,6,4,3,9,8,8,2,4,9,6,9), score(8,7,5,3,2,8,8,8,1,3,8,6,9), tensile="~74 MPa", modulus="~5.32 GPa", impact="Stiff and dimensionally stable", shrinkage="Low to moderate"),
@@ -204,7 +249,7 @@ def seed_materials(session: Session) -> None:
         dict(
             slug="ppa-cf", name="PPA-CF", full_name="Carbon-fibre-reinforced polyphthalamide", family="High-performance polyamide", subfamily="Carbon fibre", family_color="#d63384",
             formula="Aromatic polyamide + chopped carbon fibre", repeat_unit="[—NH—Ar—C(=O)—]ₙ + CF",
-            description="The maximum practical X2D engineering material for heat, stiffness and dry structural load. It requires serious drying and operates near the 300 °C X2D ceiling.",
+            description="A maximum practical engineering material for heat, stiffness and dry structural load. It requires serious drying and operates near a 300 °C printer ceiling.",
             best_for="Highest-heat structural brackets, technical powertrain-adjacent fixtures, premium engineering parts.", avoid_for="Casual printing, soft impact parts, use through the auxiliary filament path.",
             settings=settings("290–300 °C", "100–110 °C", "60–65 °C", "100–140 °C · 8–12 h", "20–80 mm/s", "0.6 mm TC strongly recommended · MAIN / LEFT only", True, False, "Low fan; dry enclosure / dry feed"),
             properties=properties(1.25, 227, 180, 10, 7, 4, 9, 5, 10, score(10,10,7,5,4,10,9,7,0,2,10,5,10), score(8,8,6,4,3,9,9,7,0,1,9,5,10), tensile="~168 MPa dry", modulus="~9.86 GPa", impact="Very stiff; use a tougher polymer when impact is primary", shrinkage="Low due to CF; drying is critical"),
@@ -225,7 +270,7 @@ def seed_materials(session: Session) -> None:
             subfamily=data["subfamily"], family_color=data["family_color"], formula=data["formula"],
             repeat_unit=data["repeat_unit"], description=data["description"], best_for=data["best_for"],
             avoid_for=data["avoid_for"], settings_json=json.dumps(data["settings"]), properties_json=json.dumps(data["properties"]),
-            source_notes=f"{SOURCE_X2D} {SOURCE_DRY}",
+            source_notes=f"{SOURCE_PRINTER} {SOURCE_DRY}",
         )
         session.add(mat)
 

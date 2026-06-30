@@ -47,9 +47,11 @@ class FilamentProduct(Base):
     supplier: Mapped[str] = mapped_column(String(160), default="")
     url: Mapped[str] = mapped_column(String(800), default="")
     color_name: Mapped[str] = mapped_column(String(80), default="")
+    spool_code: Mapped[str] = mapped_column(String(60), default="")
     spool_weight_g: Mapped[float] = mapped_column(Float, default=1000)
     notes: Mapped[str] = mapped_column(Text, default="")
     favorite: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     material: Mapped["Material"] = relationship(back_populates="products")
@@ -72,12 +74,32 @@ class PriceEntry(Base):
     product: Mapped["FilamentProduct"] = relationship(back_populates="price_entries")
 
 
+class PrinterPreset(Base):
+    __tablename__ = "printer_presets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    slug: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(160))
+    nozzle_max_c: Mapped[float] = mapped_column(Float, default=300)
+    bed_max_c: Mapped[float] = mapped_column(Float, default=100)
+    enclosed: Mapped[bool] = mapped_column(Boolean, default=False)
+    direct_drive: Mapped[bool] = mapped_column(Boolean, default=True)
+    supports_flexible: Mapped[bool] = mapped_column(Boolean, default=True)
+    ams_capable: Mapped[bool] = mapped_column(Boolean, default=False)
+    notes: Mapped[str] = mapped_column(Text, default="")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    print_profiles: Mapped[list["PrintProfile"]] = relationship(back_populates="printer")
+
+
 class PrintProfile(Base):
     __tablename__ = "print_profiles"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     material_id: Mapped[int] = mapped_column(ForeignKey("materials.id"), index=True)
     product_id: Mapped[int | None] = mapped_column(ForeignKey("filament_products.id"), nullable=True, index=True)
+    printer_id: Mapped[int | None] = mapped_column(ForeignKey("printer_presets.id"), nullable=True, index=True)
     profile_name: Mapped[str] = mapped_column(String(180))
     state: Mapped[str] = mapped_column(String(30), default="Dry")
     nozzle_diameter: Mapped[float] = mapped_column(Float, default=0.4)
@@ -88,9 +110,11 @@ class PrintProfile(Base):
     dryer_temp: Mapped[float] = mapped_column(Float, default=0)
     dryer_hours: Mapped[float] = mapped_column(Float, default=0)
     build_plate: Mapped[str] = mapped_column(String(140), default="")
+    filament_used_g: Mapped[float] = mapped_column(Float, default=0)
     result_rating: Mapped[int] = mapped_column(Integer, default=3)
     notes: Mapped[str] = mapped_column(Text, default="")
     printed_on: Mapped[date] = mapped_column(Date, default=date.today)
 
     material: Mapped["Material"] = relationship(back_populates="print_profiles")
     product: Mapped["FilamentProduct | None"] = relationship(back_populates="print_profiles")
+    printer: Mapped["PrinterPreset | None"] = relationship(back_populates="print_profiles")

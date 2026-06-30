@@ -8,29 +8,51 @@
 
 <section class="filter-panel">
   <label class="search-box"><span>⌕</span><input id="material-search" type="search" placeholder="Search PETG, nylon, CF, heat, outdoor…"></label>
-  <div class="family-filters" id="family-filters">
-    <button class="chip is-selected" data-family="all">All materials</button>
-    {% for family in families %}<button class="chip" data-family="{{ family }}">{{ family }}</button>{% endfor %}
+  <div class="filter-panel__hint">Search reads names, families, uses, process notes and compatibility tags.</div>
+  <div class="family-filters family-filters--primary" id="family-filters">
+    {% for filter in filters %}
+      {% if filter.key in ["all", "main-path", "aux-path", "ams-compatible", "group-elastomer", "group-polyamide", "group-high-temp", "group-filled", "group-support"] %}
+        <button class="chip {% if loop.first %}is-selected{% endif %}" data-material-filter="{{ filter.key }}">{{ filter.label }}</button>
+      {% endif %}
+    {% endfor %}
   </div>
+  <details class="filter-more">
+    <summary>More filters</summary>
+    <div class="family-filters family-filters--advanced">
+      {% for filter in filters %}
+        {% if filter.key not in ["all", "main-path", "aux-path", "ams-compatible", "group-elastomer", "group-polyamide", "group-high-temp", "group-filled", "group-support"] %}
+          <button class="chip" data-material-filter="{{ filter.key }}">{{ filter.label }}</button>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </details>
 </section>
 
 <section class="material-grid" id="material-grid">
 {% for material in materials %}
-  <a class="material-card" data-family="{{ material.family }}" data-search="{{ material.name }} {{ material.full_name }} {{ material.family }} {{ material.subfamily }} {{ material.best_for }} {{ material.avoid_for }}" href="/materials/{{ material.slug }}" style="--material-color: {{ material.family_color }}">
+  <a class="material-card {% if material.is_catalog %}catalog-card{% endif %}" data-family="{{ material.family }}" data-filters="{{ (material.compatibility.filter_keys + material.filter_keys) | unique | join(' ') }}" data-search="{{ material.name }} {{ material.full_name }} {{ material.family }} {{ material.subfamily }} {{ material.best_for }} {{ material.avoid_for }} {{ material.description }} {{ material.search or '' }} {{ material.settings.recommended_nozzle }} {{ material.compatibility.filter_keys | join(' ') }} {{ material.filter_keys | join(' ') }}" href="/materials/{{ material.slug }}" style="--material-color: {{ material.family_color }}">
     <div class="material-card-top">
       <span class="family-pill">{{ material.family }}</span>
       <span class="subfamily-pill {% if 'Carbon' in material.subfamily %}cf{% elif 'Glass' in material.subfamily %}gf{% endif %}">{{ material.subfamily }}</span>
+      {% if material.is_catalog %}<span class="subfamily-pill">Approximate catalog</span>{% endif %}
     </div>
     <h3>{{ material.name }}</h3><p>{{ material.full_name }}</p>
     <div class="status-row">
-      <span class="status-chip">{% if material.settings.main_compatible %}MAIN ✓{% else %}MAIN —{% endif %}</span>
-      <span class="status-chip {% if not material.settings.aux_compatible %}warning{% endif %}">{% if material.settings.aux_compatible %}AUX ✓{% else %}AUX NO{% endif %}</span>
-      <span class="status-chip muted">{{ material.settings.recommended_nozzle }}</span>
+      <span class="status-chip">{% if material.compatibility.direct_path %}DIRECT ✓{% else %}DIRECT —{% endif %}</span>
+      <span class="status-chip {% if not material.compatibility.aux_path %}warning{% endif %}">{% if material.compatibility.aux_path %}AUX ✓{% else %}AUX NO{% endif %}</span>
+      <span class="status-chip {% if not material.compatibility.ams %}warning{% endif %}">{% if material.compatibility.ams %}AMS ✓{% else %}AMS NO{% endif %}</span>
+      <span class="status-chip muted">{{ material.status if material.is_catalog else material.settings.recommended_nozzle }}</span>
     </div>
     <div class="micro-stats">
-      <span><small>HDT</small><b>{% if material.properties.hdt_c %}{{ material.properties.hdt_c }} °C{% else %}—{% endif %}</b></span>
-      <span><small>Density</small><b>{{ '%.2f'|format(material.properties.density_g_cm3) }}</b></span>
-      <span><small>Moisture</small><b>{{ material.properties.moisture_sensitivity }}/10</b></span>
+      {% if material.is_catalog %}
+        <span><small>HDT</small><b>{{ material.real_properties.hdt_c.label or '—' }}</b></span>
+        <span><small>Density</small><b>{{ material.real_properties.density_g_cm3.label or '—' }}</b></span>
+        <span><small>Tensile</small><b>{{ material.real_properties.tensile_mpa.label or '—' }}</b></span>
+      {% else %}
+        <span><small>HDT</small><b>{% if material.properties.hdt_c %}{{ material.properties.hdt_c }} °C{% else %}—{% endif %}</b></span>
+        <span><small>Density</small><b>{{ '%.2f'|format(material.properties.density_g_cm3) }}</b></span>
+        <span><small>Moisture</small><b>{{ material.properties.moisture_sensitivity }}/10</b></span>
+      {% endif %}
     </div>
     <div class="score-pair">
       <div><span>XY rigidity</span><i><em style="width: {{ material.scores.dry.rigidity_xy * 10 }}%"></em></i></div>

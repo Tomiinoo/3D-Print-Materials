@@ -1,27 +1,91 @@
 {% extends "base.html" %}
-{% block title %}Material Lab — New Material{% endblock %}
+{% block title %}Material Lab — {% if mode == 'edit' %}Edit Material{% else %}New Material{% endif %}{% endblock %}
 {% block content %}
-<section class="page-hero compact"><div><span class="eyebrow">MATERIAL STUDIO</span><h1>Add an expandable material record.</h1><p>Start with the basic identity and X2D process settings. The JSON boxes make the record flexible enough for more engineering values later.</p></div></section>
-<form class="material-form panel" action="/materials/new" method="post">
-  <div class="panel-title"><span class="eyebrow">1. IDENTITY</span><h2>Basic material record</h2></div>
-  <div class="form-grid">
-    <label>Short material name<input required name="name" placeholder="Example: PPS-CF"></label>
-    <label>URL slug<input required name="slug" placeholder="Example: pps-cf"></label>
-    <label>Full chemical name<input required name="full_name" placeholder="Example: Carbon-fibre-reinforced polyphenylene sulfide"></label>
-    <label>Material family<input required name="family" placeholder="Example: High-performance polymer"></label>
-    <label>Subfamily / reinforcement<input name="subfamily" value="Base polymer" placeholder="Carbon fibre / Glass fibre / Base polymer"></label>
-    <label>Family colour<input required type="color" name="family_color" value="#64748b"></label>
-    <label>Chemical formula<input name="formula" placeholder="Example: (C6H4S)n"></label>
-    <label>Repeat unit / simplified skeleton<input name="repeat_unit" placeholder="Example: [—C6H4—S—]n"></label>
-    <label class="span-all">Description<textarea name="description" placeholder="What is it and what makes it distinct?"></textarea></label>
-    <label>Choose it for<textarea name="best_for" placeholder="Best use cases"></textarea></label>
-    <label>Do not choose it for<textarea name="avoid_for" placeholder="Trade-offs / constraints"></textarea></label>
+{% set is_edit = mode == 'edit' %}
+{% set settings = material.settings %}
+{% set properties = material.properties %}
+<section class="page-hero compact">
+  <div>
+    <span class="eyebrow">MATERIAL STUDIO</span>
+    <h1>{% if is_edit %}Edit {{ material.name }}.{% else %}Add a material without touching JSON.{% endif %}</h1>
+    <p>Use the normal fields for everyday edits. The advanced JSON is still there for unusual properties and power-user cleanup.</p>
   </div>
-  <div class="panel-title spaced"><span class="eyebrow">2. SETTINGS</span><h2>Process profile as JSON</h2><p>Keep the existing keys. You can add new fields later.</p></div>
-  <label class="code-input">Settings JSON<textarea required name="settings_json" spellcheck="false">{{ example_settings }}</textarea></label>
-  <div class="panel-title spaced"><span class="eyebrow">3. PROPERTIES</span><h2>Scores, density and engineering values</h2><p>Scores are 0–10 comparison values. Keep both dry and wet states for moisture-sensitive materials.</p></div>
-  <label class="code-input">Properties JSON<textarea required name="properties_json" spellcheck="false">{{ example_properties }}</textarea></label>
-  <label>Source / TDS notes<textarea name="source_notes" placeholder="Source URL, manufacturer grade, test conditions, caveats…"></textarea></label>
-  <div class="form-actions"><a class="button secondary" href="/materials">Cancel</a><button class="button primary" type="submit">Create material record →</button></div>
+</section>
+
+<form class="material-form panel" action="{% if is_edit %}/materials/{{ material.slug }}/edit{% else %}/materials/new{% endif %}" method="post">
+  <div class="panel-title">
+    <span class="eyebrow">1. IDENTITY</span>
+    <h2>What material is this?</h2>
+  </div>
+  <div class="form-grid">
+    <label>Short material name<input required name="name" value="{{ material.name }}" placeholder="Example: PPS-CF"></label>
+    <label>URL slug<input required name="slug" value="{{ material.slug }}" placeholder="Example: pps-cf"></label>
+    <label>Full chemical name<input required name="full_name" value="{{ material.full_name }}" placeholder="Example: Carbon-fibre-reinforced polyphenylene sulfide"></label>
+    <label>Material family<input required name="family" value="{{ material.family }}" placeholder="Example: High-performance polymer"></label>
+    <label>Subfamily / reinforcement<input name="subfamily" value="{{ material.subfamily }}" placeholder="Carbon fibre / Glass fibre / Base polymer"></label>
+    <label>Family colour<input required type="color" name="family_color" value="{{ material.family_color }}"></label>
+    <label>Chemical formula<input name="formula" value="{{ material.formula }}" placeholder="Example: (C6H4S)n"></label>
+    <label>Repeat unit / simplified skeleton<input name="repeat_unit" value="{{ material.repeat_unit }}" placeholder="Example: [—C6H4—S—]n"></label>
+    <label class="span-all">Description<textarea name="description" placeholder="What is it and what makes it distinct?">{{ material.description }}</textarea></label>
+    <label>Choose it for<textarea name="best_for" placeholder="Best use cases">{{ material.best_for }}</textarea></label>
+    <label>Do not choose it for<textarea name="avoid_for" placeholder="Trade-offs / constraints">{{ material.avoid_for }}</textarea></label>
+  </div>
+
+  <div class="panel-title spaced">
+    <span class="eyebrow">2. PRINTING WINDOW</span>
+    <h2>Printer and process settings</h2>
+    <p>These fields drive compatibility filters in the library and guide.</p>
+  </div>
+  <div class="form-grid friendly-fields">
+    <label>Nozzle temperature<input name="nozzle" value="{{ settings.nozzle or '' }}" placeholder="245–270 °C"></label>
+    <label>Bed temperature<input name="bed" value="{{ settings.bed or '' }}" placeholder="70–100 °C"></label>
+    <label>Chamber / enclosure<input name="chamber" value="{{ settings.chamber or '' }}" placeholder="Ambient / 45 °C / enclosed"></label>
+    <label>Print speed<input name="speed" value="{{ settings.speed or '' }}" placeholder="40–120 mm/s"></label>
+    <label>Drying<input name="drying" value="{{ settings.drying or '' }}" placeholder="80 °C, 8 h"></label>
+    <label>Cooling<input name="cooling" value="{{ settings.cooling or '' }}" placeholder="Low fan / off / moderate"></label>
+    <label>Recommended nozzle<input name="recommended_nozzle" value="{{ settings.recommended_nozzle or '' }}" placeholder="0.4 mm hardened / 0.6 TC"></label>
+    <label class="check-label"><input type="checkbox" name="main_compatible" {% if settings.get('main_compatible', true) %}checked{% endif %}> Direct path compatible</label>
+    <label class="check-label"><input type="checkbox" name="aux_compatible" {% if settings.get('aux_compatible', false) %}checked{% endif %}> Auxiliary path compatible</label>
+    <label class="check-label"><input type="checkbox" name="ams_compatible" {% if settings.get('ams_compatible', false) %}checked{% endif %}> AMS / multi-spool compatible</label>
+  </div>
+
+  <div class="panel-title spaced">
+    <span class="eyebrow">3. REAL VALUES</span>
+    <h2>Engineering reference data</h2>
+    <p>Use ranges when a family varies. Use exact numbers when you have a product TDS.</p>
+  </div>
+  <div class="form-grid friendly-fields">
+    <label>Density (g/cm³)<input name="density_g_cm3" value="{{ properties.density_g_cm3 or '' }}" placeholder="1.24 or 1.20–1.30"></label>
+    <label>Tensile strength (MPa)<input name="tensile_mpa" value="{{ properties.tensile_mpa or '' }}" placeholder="102 or 90–120"></label>
+    <label>Tensile/flexural modulus (GPa)<input name="modulus_gpa" value="{{ properties.modulus_gpa or '' }}" placeholder="4.5 or 3.5–6"></label>
+    <label>HDT (°C)<input name="hdt_c" value="{{ properties.hdt_c or '' }}" placeholder="95 or 85–110"></label>
+    <label>Continuous service (°C)<input name="continuous_service_c" value="{{ properties.continuous_service_c or '' }}" placeholder="70–90"></label>
+    <label>Moisture sensitivity (0–10)<input type="number" min="0" max="10" step="0.5" name="moisture_sensitivity" value="{{ properties.moisture_sensitivity or '' }}"></label>
+    <label>Water resistance (0–10)<input type="number" min="0" max="10" step="0.5" name="water_resistance" value="{{ properties.water_resistance or '' }}"></label>
+    <label>Chemical resistance (0–10)<input type="number" min="0" max="10" step="0.5" name="chemical_resistance" value="{{ properties.chemical_resistance or '' }}"></label>
+    <label>UV resistance (0–10)<input type="number" min="0" max="10" step="0.5" name="uv_resistance" value="{{ properties.uv_resistance or '' }}"></label>
+    <label>Creep resistance (0–10)<input type="number" min="0" max="10" step="0.5" name="creep_resistance" value="{{ properties.creep_resistance or '' }}"></label>
+    <label>Flame behaviour (0–10)<input type="number" min="0" max="10" step="0.5" name="flame_resistance" value="{{ properties.flame_resistance or '' }}"></label>
+    <label>Impact note<input name="impact_note" value="{{ properties.impact_note or '' }}" placeholder="Charpy/Izod value, or practical caveat"></label>
+    <label class="span-all">Shrinkage / warping note<textarea name="shrinkage_note" placeholder="Warping tendency, enclosure notes, annealing caveats">{{ properties.shrinkage_note or '' }}</textarea></label>
+  </div>
+
+  <div class="panel-title spaced">
+    <span class="eyebrow">4. SOURCE</span>
+    <h2>Where did the values come from?</h2>
+  </div>
+  <label>Source / TDS notes<textarea name="source_notes" placeholder="Manufacturer TDS, product URL, test standard, condition, caveats">{{ material.source_notes }}</textarea></label>
+
+  <details class="advanced-json">
+    <summary>Advanced JSON editor</summary>
+    <p>These are still the actual flexible fields stored in the database. Normal fields above are merged into this JSON when you save.</p>
+    <label class="code-input">Settings JSON<textarea required name="settings_json" spellcheck="false">{{ example_settings }}</textarea></label>
+    <label class="code-input">Properties JSON<textarea required name="properties_json" spellcheck="false">{{ example_properties }}</textarea></label>
+  </details>
+
+  <div class="form-actions">
+    <a class="button secondary" href="{% if is_edit %}/materials/{{ material.slug }}{% else %}/materials{% endif %}">Cancel</a>
+    <button class="button primary" type="submit">{% if is_edit %}Save material record →{% else %}Create material record →{% endif %}</button>
+  </div>
 </form>
 {% endblock %}

@@ -12,17 +12,52 @@
   </label>
   <label class="state-select">Bar property
     <select id="compare-property">
-      {% for key, label in score_labels.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+      <optgroup label="0-10 scores">
+        {% for key, label in score_labels.items() %}
+          {% if key != "price_range" %}
+            <option value="score:{{ key }}">{{ label }}</option>
+          {% endif %}
+        {% endfor %}
+      </optgroup>
+      <optgroup label="Real values">
+        <option value="real:price_per_kg">Current price (€/kg)</option>
+        <option value="real:tensile_mpa">Tensile strength (MPa)</option>
+        <option value="real:modulus_gpa">Tensile modulus (GPa)</option>
+        <option value="real:hdt_c">HDT (°C)</option>
+        <option value="real:continuous_service_c">Continuous service (°C)</option>
+        <option value="real:density_g_cm3">Density (g/cm³)</option>
+      </optgroup>
     </select>
   </label>
-  <div class="compare-picker" id="compare-picker">
-    {% for material in materials %}
-    <label class="compare-option" style="--material-color: {{ material.family_color }}">
-      <input type="checkbox" value="{{ material.slug }}" {% if loop.index <= 4 %}checked{% endif %}>
-      <span class="compare-swatch"></span><b>{{ material.name }}</b><small>{{ material.subfamily }}</small>
-    </label>
-    {% endfor %}
+  <label class="state-select">Map X
+    <select id="scatter-x-property">
+      <option value="score:impact_resistance">Impact resistance score</option>
+      <option value="score:strength_xy">XY strength score</option>
+      <option value="score:layer_adhesion">Layer bond score</option>
+      <option value="score:heat_resistance">Heat resistance score</option>
+      <option value="real:tensile_mpa">Tensile strength (MPa)</option>
+      <option value="real:modulus_gpa">Tensile modulus (GPa)</option>
+      <option value="real:price_per_kg">Current price (€/kg)</option>
+    </select>
+  </label>
+  <label class="state-select">Map Y
+    <select id="scatter-y-property">
+      <option value="score:heat_resistance">Heat resistance score</option>
+      <option value="score:impact_resistance">Impact resistance score</option>
+      <option value="score:strength_xy">XY strength score</option>
+      <option value="score:layer_adhesion">Layer bond score</option>
+      <option value="real:hdt_c">HDT (°C)</option>
+      <option value="real:continuous_service_c">Continuous service (°C)</option>
+      <option value="real:tensile_mpa">Tensile strength (MPa)</option>
+    </select>
+  </label>
+  <div class="compare-family-picker" id="compare-family-picker"></div>
+  <div class="compare-selection-tools">
+    <label class="search-box compare-search"><span>⌕</span><input id="compare-material-search" type="search" placeholder="Search inside selected family..."></label>
+    <span id="compare-selected-count"></span>
+    <button class="button small secondary" type="button" id="compare-clear">Clear</button>
   </div>
+  <div class="compare-picker" id="compare-picker"></div>
 </section>
 
 <section class="comparison-grid">
@@ -30,9 +65,9 @@
   <article class="panel chart-panel"><div class="panel-title"><span class="eyebrow">SELECTED PROPERTY</span><h2 id="bar-chart-title">Score comparison</h2></div><div id="bar-chart" class="chart-slot"></div></article>
 </section>
 
-<section class="panel chart-panel full-chart"><div class="panel-title"><span class="eyebrow">TRADE-OFF MAP</span><h2>Heat resistance vs impact resistance</h2><p>Top-left is the difficult combination: high heat and high impact. Most CF/GF materials trade impact performance for stiffness.</p></div><div id="scatter-chart" class="chart-slot scatter-slot"></div></section>
+<section class="panel chart-panel full-chart"><div class="panel-title"><span class="eyebrow">TRADE-OFF MAP</span><h2 id="scatter-chart-title">Heat resistance vs impact resistance</h2><p id="scatter-chart-note">Choose any two score or real-value properties. Scores are 0-10; real values use the best available prototype/reference value.</p></div><div id="scatter-chart" class="chart-slot scatter-slot"></div></section>
 
-<section class="panel compare-table-wrap"><div class="panel-title"><span class="eyebrow">NUMERIC REFERENCE</span><h2>Selected materials</h2></div><div class="table-scroll"><table id="compare-table"><thead><tr><th>Material</th><th>State</th><th>Density</th><th>HDT</th><th>Continuous</th><th>Moisture</th><th>XY strength</th><th>Layer bond</th><th>Impact</th><th>Price range</th></tr></thead><tbody></tbody></table></div></section>
+<section class="panel compare-table-wrap"><div class="panel-title"><span class="eyebrow">NUMERIC REFERENCE</span><h2>Selected materials</h2></div><div class="table-scroll"><table id="compare-table"><thead><tr><th>Material</th><th>State</th><th>Density</th><th>HDT</th><th>Continuous</th><th>Tensile</th><th>Modulus</th><th>Strength score</th><th>Impact score</th><th>Current price</th></tr></thead><tbody></tbody></table></div></section>
 
 <script id="compare-material-data" type="application/json">{{ materials | tojson }}</script>
 {% endblock %}

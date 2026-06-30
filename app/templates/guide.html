@@ -21,6 +21,39 @@
     <label class="state-select guide-state">Condition
       <select id="guide-state"><option value="dry">Dry / freshly dried</option><option value="wet">Moisture-conditioned / wet</option></select>
     </label>
+    <label class="state-select guide-state">Printer / path
+      <select id="guide-printer-filter">
+        <option value="all">Any saved printer</option>
+        <option value="main-path">X2D Prime nozzle / direct path</option>
+        <option value="aux-path">X2D Aux nozzle / auxiliary path</option>
+        <option value="ams-compatible">AMS compatible</option>
+        {% for printer in printers %}
+          <option value="printer-{{ printer.slug }}">{{ printer.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <details class="guide-advanced">
+      <summary>Advanced real-value filters</summary>
+      <div class="advanced-filter-grid">
+        <label>Minimum HDT
+          <input type="range" min="0" max="300" step="5" value="0" data-guide-filter="min-hdt">
+          <output data-guide-output="min-hdt">Any</output>
+        </label>
+        <label>Minimum tensile strength
+          <input type="range" min="0" max="250" step="5" value="0" data-guide-filter="min-tensile">
+          <output data-guide-output="min-tensile">Any</output>
+        </label>
+        <label>Minimum modulus
+          <input type="range" min="0" max="25" step="0.5" value="0" data-guide-filter="min-modulus">
+          <output data-guide-output="min-modulus">Any</output>
+        </label>
+        <label>Maximum tracked price
+          <input type="range" min="0" max="150" step="1" value="0" data-guide-filter="max-price">
+          <output data-guide-output="max-price">Any</output>
+        </label>
+      </div>
+      <button class="button small secondary" type="button" id="guide-reset-filters">Reset real filters</button>
+    </details>
     <button class="button primary" id="guide-run">Rank materials →</button>
   </article>
 
@@ -40,5 +73,6 @@
 <section class="section-heading"><div><span class="eyebrow">2. RANKED SHORTLIST</span><h2 id="guide-heading">Choose one or more requirements.</h2></div></section>
 <section id="guide-results" class="guide-results"><div class="empty-state">Select requirements above, then rank materials.</div></section>
 <script id="guide-material-data" type="application/json">{{ materials | tojson }}</script>
+<script id="guide-printer-data" type="application/json">{{ printers | tojson }}</script>
 {% endblock %}
 {% block scripts %}<script src="{{ url_for('static', path='js/guide.js') }}"></script>{% endblock %}

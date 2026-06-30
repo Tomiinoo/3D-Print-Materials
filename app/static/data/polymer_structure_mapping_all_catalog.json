@@ -1,0 +1,1280 @@
+{
+  "schema_version": 1,
+  "purpose": "Canonical structure assignment for a material explorer. A material variant inherits a base polymer structure and receives a separate additive/formulation badge. It must never receive a fabricated new repeat unit merely because it contains CF, GF, ESD, FR, colour, glow pigment, recycled feedstock, or a marketing-grade label.",
+  "rendering_contract": {
+    "required_visual": "Use inline SVG chemical diagrams designed and stored locally in the project. Do not scrape Google Images, hotlink image files, use watermarked stock art, or use a generic ball-and-stick picture.",
+    "color_rule": "Use element labels and bonds as the primary information. Optional restrained colors are supplementary only; never rely on red/grey atoms with no labels.",
+    "safety_rule": "For exact standard polymers, show a repeat unit. For blends/copolymers/graft polymers or proprietary umbrella grades, show an explicitly labelled schematic rather than an invented exact repeat unit.",
+    "composite_rule": "CF/GF/metal/mineral/wood/etc. are additives or reinforcements. Draw the base resin structure plus a clearly separate modifier badge/overlay; do not put a fibre or filler into the polymer repeat unit unless an actual chemical copolymer is known.",
+    "accessibility_rule": "Each SVG needs a title, desc, aria-label, semantic visible caption, and high-contrast dark/light mode support."
+  },
+  "structures": {
+    "pla": {
+      "title": "Poly(lactic acid) / Polylactide",
+      "short_label": "PLA repeating unit",
+      "render_mode": "repeat_unit",
+      "formula": "[–O–CH(CH₃)–C(=O)–]ₙ",
+      "iupac_style_name": "poly(2-hydroxypropanoic acid)",
+      "chemistry_status": "standard repeating unit",
+      "diagram_note": "Show the ester backbone, the CH₃ side group, bracket and n. PLA stereochemistry (PLLA/PDLA/PDLLA) can differ and is intentionally not implied by this default drawing."
+    },
+    "pet": {
+      "title": "Poly(ethylene terephthalate)",
+      "short_label": "PET repeating unit",
+      "render_mode": "repeat_unit",
+      "formula": "[–O–CH₂–CH₂–O–C(=O)–C₆H₄–C(=O)–]ₙ",
+      "iupac_style_name": "poly(ethylene terephthalate)",
+      "chemistry_status": "standard repeating unit",
+      "diagram_note": "Draw a para-phenylene ring between the two carbonyl groups. Do not draw PETG with this as an exact composition."
+    },
+    "petg_copolyester": {
+      "title": "PETG / glycol-modified PET copolyester",
+      "short_label": "Copolyester schematic",
+      "render_mode": "copolymer_schematic",
+      "formula": "PET-like terephthalate backbone + variable glycol comonomer(s)",
+      "iupac_style_name": "glycol-modified polyethylene terephthalate copolyester",
+      "chemistry_status": "composition varies by manufacturer",
+      "diagram_note": "Render the PET terephthalate section as the primary motif and a clearly labelled dashed “modified glycol comonomer” segment. Do not present one exact repeat unit as universal PETG chemistry."
+    },
+    "copolyester_generic": {
+      "title": "Engineering copolyester",
+      "short_label": "Copolyester schematic",
+      "render_mode": "copolymer_schematic",
+      "formula": "Polyester backbone + manufacturer-specific comonomers",
+      "iupac_style_name": "copolyester",
+      "chemistry_status": "not a single standardized repeat unit",
+      "diagram_note": "Use a clean polyester-chain schematic with labelled variable comonomer block. Never invent a single molecular structure for CPE, CPE+, CoPET, PCTG or similar commercial umbrella terms."
+    },
+    "abs_graft": {
+      "title": "Acrylonitrile–butadiene–styrene",
+      "short_label": "ABS graft/terpolymer schematic",
+      "render_mode": "graft_copolymer_schematic",
+      "formula": "polybutadiene rubber backbone/domain with poly(styrene-co-acrylonitrile) grafts",
+      "iupac_style_name": "acrylonitrile butadiene styrene",
+      "chemistry_status": "terpolymer/graft system; ratio and morphology vary",
+      "diagram_note": "Do not show ABS as one false homopolymer repeat unit. Show a rubbery butadiene backbone/domain and labelled SAN graft chains. Include “composition varies by grade”."
+    },
+    "asa_graft": {
+      "title": "Acrylonitrile–styrene–acrylate",
+      "short_label": "ASA graft/terpolymer schematic",
+      "render_mode": "graft_copolymer_schematic",
+      "formula": "acrylate-rubber backbone/domain with poly(styrene-co-acrylonitrile) grafts",
+      "iupac_style_name": "acrylonitrile styrene acrylate",
+      "chemistry_status": "terpolymer/graft system; ratio and morphology vary",
+      "diagram_note": "Use an acrylic-rubber core/domain with labelled SAN graft chains. Make clear that ASA is not a single exact repeat unit."
+    },
+    "polystyrene": {
+      "title": "Polystyrene",
+      "short_label": "PS repeating unit",
+      "render_mode": "repeat_unit",
+      "formula": "[–CH₂–CH(C₆H₅)–]ₙ",
+      "iupac_style_name": "poly(styrene)",
+      "chemistry_status": "standard repeating unit",
+      "diagram_note": "Show phenyl side group attached to the vinyl backbone."
+    },
+    "hips": {
+      "title": "High-impact polystyrene",
+      "short_label": "HIPS toughened-PS schematic",
+      "render_mode": "blend_or_graft_schematic",
+      "formula": "polystyrene matrix + polybutadiene rubber phase/grafts",
+      "iupac_style_name": "high-impact polystyrene",
+      "chemistry_status": "multiphase toughened polymer",
+      "diagram_note": "Show a PS chain plus distinct rubber phase/graft motif; do not label the result as a pure PS repeat unit."
+    },
+    "san_random": {
+      "title": "Styrene–acrylonitrile copolymer",
+      "short_label": "SAN random-copolymer schematic",
+      "render_mode": "copolymer_schematic",
+      "formula": "[–CH₂–CH(C₆H₅)–]ₓ[–CH₂–CH(C≡N)–]ᵧ",
+      "iupac_style_name": "poly(styrene-co-acrylonitrile)",
+      "chemistry_status": "copolymer composition varies by grade",
+      "diagram_note": "Use a random/alternating-looking chain with two labelled repeat motifs and x/y composition notation."
+    },
+    "tpu_segmented": {
+      "title": "Thermoplastic polyurethane",
+      "short_label": "Segmented TPU schematic",
+      "render_mode": "segmented_polymer_schematic",
+      "formula": "[–O–R–O–C(=O)–NH–R′–NH–C(=O)–]ₙ",
+      "iupac_style_name": "segmented polyurethane elastomer",
+      "chemistry_status": "soft-segment/hard-segment chemistry varies by grade",
+      "diagram_note": "Use a clean repeated urethane linkage and visually separate the “soft segment” R from “hard segment” R′. Shore hardness is not a different molecular structure."
+    },
+    "tpe_generic": {
+      "title": "Thermoplastic elastomer",
+      "short_label": "TPE family schematic",
+      "render_mode": "family_schematic",
+      "formula": "Hard thermoplastic domains + soft elastomer domains",
+      "iupac_style_name": "thermoplastic elastomer family",
+      "chemistry_status": "umbrella family, not one polymer",
+      "diagram_note": "Render a two-domain elastomer schematic. Do not show one exact chain because TPE is a product-class umbrella."
+    },
+    "tpc_segmented": {
+      "title": "Thermoplastic copolyester elastomer",
+      "short_label": "TPC segmented-copolymer schematic",
+      "render_mode": "segmented_polymer_schematic",
+      "formula": "[hard polyester]–[soft polyether or polyester]–",
+      "iupac_style_name": "thermoplastic copolyester elastomer",
+      "chemistry_status": "segment chemistry varies by grade",
+      "diagram_note": "Show alternating hard polyester and soft segment blocks, labelled as representative rather than exact."
+    },
+    "tpv_blend": {
+      "title": "Thermoplastic vulcanizate",
+      "short_label": "TPV multiphase schematic",
+      "render_mode": "blend_or_network_schematic",
+      "formula": "thermoplastic matrix + dynamically vulcanized elastomer network",
+      "iupac_style_name": "thermoplastic vulcanizate",
+      "chemistry_status": "multiphase material, not one repeat unit",
+      "diagram_note": "Use a thermoplastic chain with embedded crosslinked elastomer-domain illustration. Avoid a fake single polymer repeat unit."
+    },
+    "pa_generic": {
+      "title": "Polyamide / nylon",
+      "short_label": "Polyamide linkage",
+      "render_mode": "family_schematic",
+      "formula": "[–NH–R–C(=O)–]ₙ",
+      "iupac_style_name": "polyamide family",
+      "chemistry_status": "family-level linkage schematic",
+      "diagram_note": "Show amide linkage and a labelled variable R spacer. Use only where the nylon grade is not identified."
+    },
+    "pa6": {
+      "title": "Polyamide 6",
+      "short_label": "PA6 repeating unit",
+      "render_mode": "repeat_unit",
+      "formula": "[–NH–(CH₂)₅–C(=O)–]ₙ",
+      "iupac_style_name": "poly(caprolactam)",
+      "chemistry_status": "standard repeating unit",
+      "diagram_note": "Show the amide and five-methylene spacer."
+    },
+    "pa11": {
+      "title": "Polyamide 11",
+      "short_label": "PA11 repeating unit",
+      "render_mode": "repeat_unit",
+      "formula": "[–NH–(CH₂)₁₀–C(=O)–]ₙ",
+      "iupac_style_name": "poly(undecanolactam)",
+      "chemistry_status": "standard repeating unit",
+      "diagram_note": "Show the amide and ten-methylene spacer."
+    },
+    "pa12": {
+      "title": "Polyamide 12",
+      "short_label": "PA12 repeating unit",
+      "render_mode": "repeat_unit",
+      "formula": "[–NH–(CH₂)₁₁–C(=O)–]ₙ",
+      "iupac_style_name": "poly(laurolactam)",
+      "chemistry_status": "standard repeating unit",
+      "diagram_note": "Show the amide and eleven-methylene spacer."
+    },
+    "pa66": {
+      "title": "Polyamide 66",
+      "short_label": "PA66 repeating unit",
+      "render_mode": "repeat_unit",
+      "formula": "[–NH–(CH₂)₆–NH–C(=O)–(CH₂)₄–C(=O)–]ₙ",
+      "iupac_style_name": "poly(hexamethylene adipamide)",
+      "chemistry_status": "standard repeating unit",
+      "diagram_note": "Show both amide groups, hexamethylene-diamine and adipate spacer."
+    },
+    "pa610": {
+      "title": "Polyamide 610",
+      "short_label": "PA610 repeating unit",
+      "render_mode": "repeat_unit",
+      "formula": "[–NH–(CH₂)₆–NH–C(=O)–(CH₂)₈–C(=O)–]ₙ",
+      "iupac_style_name": "poly(hexamethylene sebacamide)",
+      "chemistry_status": "standard repeating unit",
+      "diagram_note": "Show both amide groups, hexamethylene diamine and sebacate spacer."
+    },
+    "pa612": {
+      "title": "Polyamide 612",
+      "short_label": "PA612 repeating unit",
+      "render_mode": "repeat_unit",
+      "formula": "[–NH–(CH₂)₆–NH–C(=O)–(CH₂)₁₀–C(=O)–]ₙ",
+      "iupac_style_name": "poly(hexamethylene dodecanediamide)",
+      "chemistry_status": "standard repeating unit",
+      "diagram_note": "Show both amide groups, hexamethylene diamine and dodecanedioate spacer."
+    },
+    "pa_copolymer": {
+      "title": "Polyamide copolymer",
+      "short_label": "CoPA copolymer schematic",
+      "render_mode": "copolymer_schematic",
+      "formula": "[–NH–R¹–C(=O)–]ₓ[–NH–R²–C(=O)–]ᵧ",
+      "iupac_style_name": "copolyamide",
+      "chemistry_status": "composition varies by manufacturer",
+      "diagram_note": "Show two amide repeat motifs with labelled variable spacer blocks. Do not call it a precise PA6/PA12 structure unless specified."
+    },
+    "paht": {
+      "title": "High-temperature polyamide",
+      "short_label": "PAHT representative schematic",
+      "render_mode": "family_schematic",
+      "formula": "High-temperature aliphatic/semi-aromatic polyamide; exact chemistry is grade-specific",
+      "iupac_style_name": "high-temperature polyamide family",
+      "chemistry_status": "commercial family; not one universal repeat unit",
+      "diagram_note": "Use a representative amide linkage with a “high-temperature nylon grade” label. Do not draw PAHT-CF as a chemically different backbone."
+    },
+    "ppa": {
+      "title": "Polyphthalamide",
+      "short_label": "PPA representative schematic",
+      "render_mode": "representative_repeat",
+      "formula": "semi-aromatic polyamide with phthalate ring(s) + aliphatic diamine segment",
+      "iupac_style_name": "polyphthalamide",
+      "chemistry_status": "isomer/diamines/comonomers vary by grade",
+      "diagram_note": "Draw an amide linkage containing an aromatic phthalate ring and a clearly labelled variable aliphatic spacer. Mark “representative PPA repeat; exact grade varies”."
+    },
+    "pc": {
+      "title": "Bisphenol-A polycarbonate",
+      "short_label": "PC repeating unit",
+      "render_mode": "repeat_unit",
+      "formula": "[–O–C₆H₄–C(CH₃)₂–C₆H₄–O–C(=O)–]ₙ",
+      "iupac_style_name": "bisphenol-A polycarbonate",
+      "chemistry_status": "common standard PC repeating unit",
+      "diagram_note": "Draw both phenyl rings, central C(CH₃)₂ bridge and carbonate linkage."
+    },
+    "pc_blend_generic": {
+      "title": "Polycarbonate blend",
+      "short_label": "PC blend schematic",
+      "render_mode": "blend_schematic",
+      "formula": "polycarbonate + unspecified second polymer",
+      "iupac_style_name": "polycarbonate blend",
+      "chemistry_status": "not a single polymer",
+      "diagram_note": "Show the PC repeat plus a dashed “second polymer varies by product” component. Do not guess the blend partner."
+    },
+    "pc_abs_blend": {
+      "title": "PC–ABS blend",
+      "short_label": "PC + ABS blend schematic",
+      "render_mode": "blend_schematic",
+      "formula": "polycarbonate + ABS graft-terpolymer",
+      "iupac_style_name": "polycarbonate/acrylonitrile-butadiene-styrene blend",
+      "chemistry_status": "blend composition varies by grade",
+      "diagram_note": "Display two linked mini-diagrams: PC repeat and ABS graft schematic; label it a blend, not a copolymer."
+    },
+    "pc_pbt_blend": {
+      "title": "PC–PBT blend",
+      "short_label": "PC + PBT blend schematic",
+      "render_mode": "blend_schematic",
+      "formula": "polycarbonate + poly(butylene terephthalate)",
+      "iupac_style_name": "polycarbonate/polybutylene terephthalate blend",
+      "chemistry_status": "blend composition varies by grade",
+      "diagram_note": "Display PC and PBT mini-diagrams separately; do not merge them into a fictional repeat unit."
+    },
+    "pc_pet_blend": {
+      "title": "PC–PET blend",
+      "short_label": "PC + PET blend schematic",
+      "render_mode": "blend_schematic",
+      "formula": "polycarbonate + polyethylene terephthalate",
+      "iupac_style_name": "polycarbonate/polyethylene terephthalate blend",
+      "chemistry_status": "blend composition varies by grade",
+      "diagram_note": "Display PC and PET mini-diagrams separately; label exact proportions as product-dependent."
+    },
+    "pc_ptfe_blend": {
+      "title": "PC–PTFE blend",
+      "short_label": "PC + PTFE blend schematic",
+      "render_mode": "blend_schematic",
+      "formula": "polycarbonate + polytetrafluoroethylene",
+      "iupac_style_name": "polycarbonate/polytetrafluoroethylene blend",
+      "chemistry_status": "blend composition varies by grade",
+      "diagram_note": "Display PC repeat plus a PTFE chain [–CF₂–CF₂–]ₙ; never imply that PTFE is chemically attached unless the product TDS says so."
+    },
+    "pbt": {
+      "title": "Poly(butylene terephthalate)",
+      "short_label": "PBT repeating unit",
+      "render_mode": "repeat_unit",
+      "formula": "[–O–(CH₂)₄–O–C(=O)–C₆H₄–C(=O)–]ₙ",
+      "iupac_style_name": "poly(butylene terephthalate)",
+      "chemistry_status": "standard repeating unit",
+      "diagram_note": "Use a four-methylene glycol section and para-phenylene terephthalate section."
+    },
+    "pmma": {
+      "title": "Poly(methyl methacrylate)",
+      "short_label": "PMMA repeating unit",
+      "render_mode": "repeat_unit",
+      "formula": "[–CH₂–C(CH₃)(C(=O)OCH₃)–]ₙ",
+      "iupac_style_name": "poly(methyl methacrylate)",
+      "chemistry_status": "standard repeating unit",
+      "diagram_note": "Show vinyl backbone, CH₃ group and methyl ester side group."
+    },
+    "pom": {
+      "title": "Polyoxymethylene",
+      "short_label": "POM repeating unit",
+      "render_mode": "repeat_unit",
+      "formula": "[–CH₂–O–]ₙ",
+      "iupac_style_name": "polyoxymethylene / polyformaldehyde",
+      "chemistry_status": "standard homopolymer repeating unit",
+      "diagram_note": "For copolymer POM grades, use the same base motif with a note that small comonomer amounts may be present."
+    },
+    "pp": {
+      "title": "Polypropylene",
+      "short_label": "PP repeating unit",
+      "render_mode": "repeat_unit",
+      "formula": "[–CH₂–CH(CH₃)–]ₙ",
+      "iupac_style_name": "poly(propylene)",
+      "chemistry_status": "standard repeating unit",
+      "diagram_note": "Show methyl side group; do not claim isotactic/syndiotactic/atactic tacticity unless product data exists."
+    },
+    "pe": {
+      "title": "Polyethylene",
+      "short_label": "PE repeating unit",
+      "render_mode": "repeat_unit",
+      "formula": "[–CH₂–CH₂–]ₙ",
+      "iupac_style_name": "poly(ethylene)",
+      "chemistry_status": "standard repeating unit",
+      "diagram_note": "Use the same repeat for HDPE and LDPE; their difference is architecture/branching, which should appear as a small note/badge, not a different monomer."
+    },
+    "eva": {
+      "title": "Ethylene–vinyl acetate copolymer",
+      "short_label": "EVA copolymer schematic",
+      "render_mode": "copolymer_schematic",
+      "formula": "[–CH₂–CH₂–]ₓ[–CH₂–CH(O–C(=O)CH₃)–]ᵧ",
+      "iupac_style_name": "poly(ethylene-co-vinyl acetate)",
+      "chemistry_status": "copolymer composition varies by VA content",
+      "diagram_note": "Show ethylene and vinyl acetate units with x/y notation."
+    },
+    "pvb": {
+      "title": "Poly(vinyl butyral)",
+      "short_label": "PVB partial-acetal schematic",
+      "render_mode": "representative_repeat",
+      "formula": "poly(vinyl alcohol) backbone with butyral acetal groups and residual OH/acetate groups",
+      "iupac_style_name": "poly(vinyl butyral)",
+      "chemistry_status": "partial acetal; composition varies by residual hydroxyl/acetate level",
+      "diagram_note": "Use a labelled PVA-derived backbone and a butyral-acetal side/bridge motif. Mark as representative, not a universal single repeat unit."
+    },
+    "sbs": {
+      "title": "Styrene–butadiene–styrene",
+      "short_label": "SBS triblock schematic",
+      "render_mode": "block_copolymer_schematic",
+      "formula": "PS–PB–PS",
+      "iupac_style_name": "polystyrene-block-polybutadiene-block-polystyrene",
+      "chemistry_status": "block copolymer; block lengths vary by grade",
+      "diagram_note": "Show three labelled blocks, not one random repeat: polystyrene / polybutadiene / polystyrene."
+    },
+    "sebs": {
+      "title": "Styrene–ethylene/butylene–styrene",
+      "short_label": "SEBS triblock schematic",
+      "render_mode": "block_copolymer_schematic",
+      "formula": "PS–P(ethylene/butylene)–PS",
+      "iupac_style_name": "polystyrene-block-poly(ethylene/butylene)-block-polystyrene",
+      "chemistry_status": "hydrogenated SBS block copolymer; composition varies",
+      "diagram_note": "Show three labelled blocks and note that the middle block is hydrogenated butadiene-derived material."
+    },
+    "pvdf": {
+      "title": "Poly(vinylidene fluoride)",
+      "short_label": "PVDF repeating unit",
+      "render_mode": "repeat_unit",
+      "formula": "[–CH₂–CF₂–]ₙ",
+      "iupac_style_name": "poly(vinylidene fluoride)",
+      "chemistry_status": "standard repeating unit",
+      "diagram_note": "Show CH₂ and CF₂ backbone; do not imply a specific crystalline phase."
+    },
+    "pps": {
+      "title": "Polyphenylene sulfide",
+      "short_label": "PPS repeating unit",
+      "render_mode": "repeat_unit",
+      "formula": "[–C₆H₄–S–]ₙ",
+      "iupac_style_name": "poly(phenylene sulfide)",
+      "chemistry_status": "standard repeating unit",
+      "diagram_note": "Draw a para-phenylene ring linked by sulfur atoms."
+    },
+    "peek": {
+      "title": "Polyether ether ketone",
+      "short_label": "PEEK repeating unit",
+      "render_mode": "repeat_unit",
+      "formula": "[–O–C₆H₄–O–C₆H₄–C(=O)–C₆H₄–]ₙ",
+      "iupac_style_name": "poly(ether ether ketone)",
+      "chemistry_status": "standard repeating unit",
+      "diagram_note": "Draw three para-phenylene rings connected by ether, ether, and ketone linkages."
+    },
+    "pekk": {
+      "title": "Polyether ketone ketone",
+      "short_label": "PEKK representative repeat",
+      "render_mode": "representative_repeat",
+      "formula": "[–O–C₆H₄–C(=O)–C₆H₄–C(=O)–C₆H₄–]ₙ",
+      "iupac_style_name": "poly(ether ketone ketone)",
+      "chemistry_status": "repeat-regioisomer distribution can vary by grade",
+      "diagram_note": "Use the aryl ether ketone ketone motif and add a small note that tere-/isophthalic arrangement varies by grade."
+    },
+    "pei": {
+      "title": "Polyetherimide",
+      "short_label": "PEI representative repeat",
+      "render_mode": "representative_repeat",
+      "formula": "aromatic ether-imide repeating motif (common BPA dianhydride / aromatic diamine architecture)",
+      "iupac_style_name": "polyetherimide",
+      "chemistry_status": "common commercial PEI architecture; product grade can vary",
+      "diagram_note": "Render a clearly labelled aromatic ether-imide motif. It must contain an imide ring/functionality, not merely “aromatic polymer”."
+    },
+    "psu": {
+      "title": "Polysulfone",
+      "short_label": "PSU representative repeat",
+      "render_mode": "representative_repeat",
+      "formula": "aromatic ether–sulfone backbone (common bisphenol-A polysulfone motif)",
+      "iupac_style_name": "polysulfone",
+      "chemistry_status": "commercial architecture representative",
+      "diagram_note": "Draw an aromatic backbone with –SO₂– and ether linkages; use a note when a grade is not BPA-polysulfone."
+    },
+    "ppsu": {
+      "title": "Polyphenylsulfone",
+      "short_label": "PPSU representative repeat",
+      "render_mode": "representative_repeat",
+      "formula": "aromatic ether–sulfone backbone with additional phenyl content",
+      "iupac_style_name": "polyphenylsulfone",
+      "chemistry_status": "commercial architecture representative",
+      "diagram_note": "Render an aromatic ether-sulfone motif; mark as representative rather than a universal repeat drawing."
+    },
+    "pesu": {
+      "title": "Polyethersulfone",
+      "short_label": "PESU representative repeat",
+      "render_mode": "representative_repeat",
+      "formula": "aromatic ether–sulfone backbone",
+      "iupac_style_name": "polyethersulfone",
+      "chemistry_status": "commercial architecture representative",
+      "diagram_note": "Render aromatic rings joined through ether and sulfone groups, labelled “representative PESU repeat”."
+    },
+    "lcp": {
+      "title": "Liquid-crystal polymer",
+      "short_label": "LCP copolyester schematic",
+      "render_mode": "family_schematic",
+      "formula": "rigid aromatic copolyester / copolyamide sequence; exact monomers vary",
+      "iupac_style_name": "thermotropic liquid-crystal polymer family",
+      "chemistry_status": "umbrella family; no single universal repeat unit",
+      "diagram_note": "Use a rigid-rod aromatic chain schematic with “composition varies by grade”. Do not claim every LCP uses the same monomers."
+    },
+    "pva": {
+      "title": "Poly(vinyl alcohol)",
+      "short_label": "PVA repeating unit",
+      "render_mode": "repeat_unit",
+      "formula": "[–CH₂–CH(OH)–]ₙ",
+      "iupac_style_name": "poly(vinyl alcohol)",
+      "chemistry_status": "standard repeating unit; degree of hydrolysis varies",
+      "diagram_note": "Show hydroxyl side group. Add a small note that residual acetate content and hydrolysis level affect real PVA grades."
+    },
+    "bvoh": {
+      "title": "Butenediol vinyl alcohol copolymer",
+      "short_label": "BVOH water-soluble copolymer schematic",
+      "render_mode": "copolymer_schematic",
+      "formula": "vinyl alcohol copolymer with proprietary comonomer content",
+      "iupac_style_name": "butenediol vinyl alcohol copolymer",
+      "chemistry_status": "commercial copolymer; composition varies by manufacturer",
+      "diagram_note": "Use PVA-like vinyl alcohol motif plus a dashed labelled comonomer block. Do not fabricate a precise universal BVOH structure."
+    },
+    "soft_pla": {
+      "title": "Soft / flexible PLA blend",
+      "short_label": "PLA blend schematic",
+      "render_mode": "blend_schematic",
+      "formula": "PLA + flexible modifier/elastomer phase",
+      "iupac_style_name": "modified PLA blend",
+      "chemistry_status": "product-defined blend, not one standardized polymer",
+      "diagram_note": "Display the PLA repeat plus a flexible-modifier badge/secondary chain. Do not label it as a distinct PLA homopolymer."
+    },
+    "support_breakaway": {
+      "title": "Breakaway support material",
+      "short_label": "Support-material schematic",
+      "render_mode": "family_schematic",
+      "formula": "proprietary removable-support polymer or blend",
+      "iupac_style_name": "breakaway support material",
+      "chemistry_status": "not a standardized polymer",
+      "diagram_note": "Use a neutral support-material graphic with “exact chemistry is manufacturer-specific”. Do not invent a molecular repeat unit."
+    },
+    "modifier_only": {
+      "title": "Composite/additive modifier",
+      "short_label": "Modifier, not a standalone polymer",
+      "render_mode": "modifier_only",
+      "formula": "Must be combined with a base polymer",
+      "iupac_style_name": "filler or additive category",
+      "chemistry_status": "not an independent polymer structure",
+      "diagram_note": "Show the named filler icon/pattern and an explicit “base resin required” label. Never render a fictional polymer repeat unit."
+    }
+  },
+  "material_assignments": {
+    "PLA": {
+      "structure_key": "pla"
+    },
+    "PETG": {
+      "structure_key": "petg_copolyester"
+    },
+    "PET": {
+      "structure_key": "pet"
+    },
+    "PETT": {
+      "structure_key": "copolyester_generic"
+    },
+    "CPE": {
+      "structure_key": "copolyester_generic"
+    },
+    "CPE+": {
+      "structure_key": "copolyester_generic"
+    },
+    "COPET": {
+      "structure_key": "copolyester_generic"
+    },
+    "PCTG": {
+      "structure_key": "copolyester_generic"
+    },
+    "ABS": {
+      "structure_key": "abs_graft"
+    },
+    "ASA": {
+      "structure_key": "asa_graft"
+    },
+    "HIPS": {
+      "structure_key": "hips"
+    },
+    "SAN": {
+      "structure_key": "san_random"
+    },
+    "TPU 95A": {
+      "structure_key": "tpu_segmented"
+    },
+    "TPE": {
+      "structure_key": "tpe_generic"
+    },
+    "TPC": {
+      "structure_key": "tpc_segmented"
+    },
+    "TPV": {
+      "structure_key": "tpv_blend"
+    },
+    "PA": {
+      "structure_key": "pa_generic"
+    },
+    "PC": {
+      "structure_key": "pc"
+    },
+    "PMMA": {
+      "structure_key": "pmma"
+    },
+    "POM": {
+      "structure_key": "pom"
+    },
+    "PP": {
+      "structure_key": "pp"
+    },
+    "HDPE": {
+      "structure_key": "pe"
+    },
+    "LDPE": {
+      "structure_key": "pe"
+    },
+    "EVA": {
+      "structure_key": "eva"
+    },
+    "PVB": {
+      "structure_key": "pvb"
+    },
+    "SBS": {
+      "structure_key": "sbs"
+    },
+    "SEBS": {
+      "structure_key": "sebs"
+    },
+    "PVDF": {
+      "structure_key": "pvdf"
+    },
+    "PPS": {
+      "structure_key": "pps"
+    },
+    "PEEK": {
+      "structure_key": "peek"
+    },
+    "PEKK": {
+      "structure_key": "pekk"
+    },
+    "PEI": {
+      "structure_key": "pei"
+    },
+    "PSU": {
+      "structure_key": "psu"
+    },
+    "PPSU": {
+      "structure_key": "ppsu"
+    },
+    "PESU": {
+      "structure_key": "pesu"
+    },
+    "LCP": {
+      "structure_key": "lcp"
+    },
+    "PLA+": {
+      "structure_key": "pla",
+      "structural_relation": "same PLA backbone; formulation/additive/processing grade changes"
+    },
+    "PLA Pro": {
+      "structure_key": "pla",
+      "structural_relation": "same PLA backbone; formulation/additive/processing grade changes"
+    },
+    "PLA Tough": {
+      "structure_key": "pla",
+      "structural_relation": "same PLA backbone; formulation/additive/processing grade changes"
+    },
+    "PLA Matte": {
+      "structure_key": "pla",
+      "structural_relation": "same PLA backbone; formulation/additive/processing grade changes"
+    },
+    "PLA Silk": {
+      "structure_key": "pla",
+      "structural_relation": "same PLA backbone; formulation/additive/processing grade changes"
+    },
+    "PLA Silk Dual Color": {
+      "structure_key": "pla",
+      "structural_relation": "same PLA backbone; formulation/additive/processing grade changes"
+    },
+    "PLA Silk Triple Color": {
+      "structure_key": "pla",
+      "structural_relation": "same PLA backbone; formulation/additive/processing grade changes"
+    },
+    "PLA Silk Rainbow": {
+      "structure_key": "pla",
+      "structural_relation": "same PLA backbone; formulation/additive/processing grade changes"
+    },
+    "HTPLA": {
+      "structure_key": "pla",
+      "structural_relation": "same PLA backbone; formulation/additive/processing grade changes"
+    },
+    "PLA HS": {
+      "structure_key": "pla",
+      "structural_relation": "same PLA backbone; formulation/additive/processing grade changes"
+    },
+    "PLA Dynamic": {
+      "structure_key": "pla",
+      "structural_relation": "same PLA backbone; formulation/additive/processing grade changes"
+    },
+    "PLA Transparent": {
+      "structure_key": "pla",
+      "structural_relation": "same PLA backbone; formulation/additive/processing grade changes"
+    },
+    "PLA Crystal": {
+      "structure_key": "pla",
+      "structural_relation": "same PLA backbone; formulation/additive/processing grade changes"
+    },
+    "PLA Galaxy": {
+      "structure_key": "pla",
+      "structural_relation": "same PLA backbone; formulation/additive/processing grade changes"
+    },
+    "PLA Glitter": {
+      "structure_key": "pla",
+      "structural_relation": "same PLA backbone; formulation/additive/processing grade changes"
+    },
+    "PLA Speckled": {
+      "structure_key": "pla",
+      "structural_relation": "same PLA backbone; formulation/additive/processing grade changes"
+    },
+    "PLA Thermochromic": {
+      "structure_key": "pla",
+      "structural_relation": "same PLA backbone; formulation/additive/processing grade changes"
+    },
+    "PLA Photochromic": {
+      "structure_key": "pla",
+      "structural_relation": "same PLA backbone; formulation/additive/processing grade changes"
+    },
+    "PLA Fluorescent": {
+      "structure_key": "pla",
+      "structural_relation": "same PLA backbone; formulation/additive/processing grade changes"
+    },
+    "Recycled PLA": {
+      "structure_key": "pla",
+      "structural_relation": "same PLA backbone; formulation/additive/processing grade changes"
+    },
+    "PLA Food Safe": {
+      "structure_key": "pla",
+      "structural_relation": "same PLA backbone; formulation/additive/processing grade changes"
+    },
+    "Bio-based PLA": {
+      "structure_key": "pla",
+      "structural_relation": "same PLA backbone; formulation/additive/processing grade changes"
+    },
+    "PLA Aero": {
+      "structure_key": "pla",
+      "structural_relation": "same PLA-derived backbone; foaming/expansion formulation changes",
+      "additives": [
+        "foaming modifier"
+      ]
+    },
+    "LW-PLA": {
+      "structure_key": "pla",
+      "structural_relation": "same PLA-derived backbone; foaming/expansion formulation changes",
+      "additives": [
+        "foaming modifier"
+      ]
+    },
+    "PLA Marble": {
+      "structure_key": "pla",
+      "structural_relation": "PLA base resin with filler/additive; filler is not part of the PLA repeat unit",
+      "additives": "see material name"
+    },
+    "PLA Wood": {
+      "structure_key": "pla",
+      "structural_relation": "PLA base resin with filler/additive; filler is not part of the PLA repeat unit",
+      "additives": "see material name"
+    },
+    "PLA Bamboo": {
+      "structure_key": "pla",
+      "structural_relation": "PLA base resin with filler/additive; filler is not part of the PLA repeat unit",
+      "additives": "see material name"
+    },
+    "PLA Cork": {
+      "structure_key": "pla",
+      "structural_relation": "PLA base resin with filler/additive; filler is not part of the PLA repeat unit",
+      "additives": "see material name"
+    },
+    "PLA Stone": {
+      "structure_key": "pla",
+      "structural_relation": "PLA base resin with filler/additive; filler is not part of the PLA repeat unit",
+      "additives": "see material name"
+    },
+    "PLA Concrete": {
+      "structure_key": "pla",
+      "structural_relation": "PLA base resin with filler/additive; filler is not part of the PLA repeat unit",
+      "additives": "see material name"
+    },
+    "PLA Brick": {
+      "structure_key": "pla",
+      "structural_relation": "PLA base resin with filler/additive; filler is not part of the PLA repeat unit",
+      "additives": "see material name"
+    },
+    "PLA Glow": {
+      "structure_key": "pla",
+      "structural_relation": "PLA base resin with filler/additive; filler is not part of the PLA repeat unit",
+      "additives": "see material name"
+    },
+    "PLA UV": {
+      "structure_key": "pla",
+      "structural_relation": "PLA base resin with filler/additive; filler is not part of the PLA repeat unit",
+      "additives": "see material name"
+    },
+    "PLA Conductive": {
+      "structure_key": "pla",
+      "structural_relation": "PLA base resin with filler/additive; filler is not part of the PLA repeat unit",
+      "additives": "see material name"
+    },
+    "PLA ESD": {
+      "structure_key": "pla",
+      "structural_relation": "PLA base resin with filler/additive; filler is not part of the PLA repeat unit",
+      "additives": "see material name"
+    },
+    "PLA Magnetic": {
+      "structure_key": "pla",
+      "structural_relation": "PLA base resin with filler/additive; filler is not part of the PLA repeat unit",
+      "additives": "see material name"
+    },
+    "PLA-CF": {
+      "structure_key": "pla",
+      "structural_relation": "PLA base resin with filler/additive; filler is not part of the PLA repeat unit",
+      "additives": "see material name"
+    },
+    "PLA-GF": {
+      "structure_key": "pla",
+      "structural_relation": "PLA base resin with filler/additive; filler is not part of the PLA repeat unit",
+      "additives": "see material name"
+    },
+    "PLA Kevlar": {
+      "structure_key": "pla",
+      "structural_relation": "PLA base resin with filler/additive; filler is not part of the PLA repeat unit",
+      "additives": "see material name"
+    },
+    "PLA Basalt Fiber": {
+      "structure_key": "pla",
+      "structural_relation": "PLA base resin with filler/additive; filler is not part of the PLA repeat unit",
+      "additives": "see material name"
+    },
+    "PLA Copper Fill": {
+      "structure_key": "pla",
+      "structural_relation": "PLA base resin with filler/additive; filler is not part of the PLA repeat unit",
+      "additives": "see material name"
+    },
+    "PLA Bronze Fill": {
+      "structure_key": "pla",
+      "structural_relation": "PLA base resin with filler/additive; filler is not part of the PLA repeat unit",
+      "additives": "see material name"
+    },
+    "PLA Brass Fill": {
+      "structure_key": "pla",
+      "structural_relation": "PLA base resin with filler/additive; filler is not part of the PLA repeat unit",
+      "additives": "see material name"
+    },
+    "PLA Aluminum Fill": {
+      "structure_key": "pla",
+      "structural_relation": "PLA base resin with filler/additive; filler is not part of the PLA repeat unit",
+      "additives": "see material name"
+    },
+    "PLA Iron Fill": {
+      "structure_key": "pla",
+      "structural_relation": "PLA base resin with filler/additive; filler is not part of the PLA repeat unit",
+      "additives": "see material name"
+    },
+    "PLA Stainless Steel Fill": {
+      "structure_key": "pla",
+      "structural_relation": "PLA base resin with filler/additive; filler is not part of the PLA repeat unit",
+      "additives": "see material name"
+    },
+    "PLA Ceramic Fill": {
+      "structure_key": "pla",
+      "structural_relation": "PLA base resin with filler/additive; filler is not part of the PLA repeat unit",
+      "additives": "see material name"
+    },
+    "PETG HF": {
+      "structure_key": "petg_copolyester",
+      "structural_relation": "same PETG/copolyester family; exact comonomer blend and additives vary by product"
+    },
+    "PETG Pro": {
+      "structure_key": "petg_copolyester",
+      "structural_relation": "same PETG/copolyester family; exact comonomer blend and additives vary by product"
+    },
+    "PETG Matte": {
+      "structure_key": "petg_copolyester",
+      "structural_relation": "same PETG/copolyester family; exact comonomer blend and additives vary by product"
+    },
+    "PETG Transparent": {
+      "structure_key": "petg_copolyester",
+      "structural_relation": "same PETG/copolyester family; exact comonomer blend and additives vary by product"
+    },
+    "Recycled PETG": {
+      "structure_key": "petg_copolyester",
+      "structural_relation": "same PETG/copolyester family; exact comonomer blend and additives vary by product"
+    },
+    "PETG-CF": {
+      "structure_key": "petg_copolyester",
+      "structural_relation": "PETG/copolyester base resin with filler/additive; not a new exact repeat unit",
+      "additives": "see material name"
+    },
+    "PETG-GF": {
+      "structure_key": "petg_copolyester",
+      "structural_relation": "PETG/copolyester base resin with filler/additive; not a new exact repeat unit",
+      "additives": "see material name"
+    },
+    "PETG ESD": {
+      "structure_key": "petg_copolyester",
+      "structural_relation": "PETG/copolyester base resin with filler/additive; not a new exact repeat unit",
+      "additives": "see material name"
+    },
+    "PETG FR": {
+      "structure_key": "petg_copolyester",
+      "structural_relation": "PETG/copolyester base resin with filler/additive; not a new exact repeat unit",
+      "additives": "see material name"
+    },
+    "Conductive PETG": {
+      "structure_key": "petg_copolyester",
+      "structural_relation": "PETG/copolyester base resin with filler/additive; not a new exact repeat unit",
+      "additives": "see material name"
+    },
+    "Magnetic PETG": {
+      "structure_key": "petg_copolyester",
+      "structural_relation": "PETG/copolyester base resin with filler/additive; not a new exact repeat unit",
+      "additives": "see material name"
+    },
+    "PET-CF": {
+      "structure_key": "pet",
+      "structural_relation": "PET base resin with filler; not a new PET repeat unit",
+      "additives": "see material name"
+    },
+    "PET-GF": {
+      "structure_key": "pet",
+      "structural_relation": "PET base resin with filler; not a new PET repeat unit",
+      "additives": "see material name"
+    },
+    "ABS+": {
+      "structure_key": "abs_graft",
+      "structural_relation": "same ABS graft/terpolymer family; formulation or filler changes",
+      "additives": "see material name"
+    },
+    "ABS Pro": {
+      "structure_key": "abs_graft",
+      "structural_relation": "same ABS graft/terpolymer family; formulation or filler changes",
+      "additives": "see material name"
+    },
+    "ABS-CF": {
+      "structure_key": "abs_graft",
+      "structural_relation": "same ABS graft/terpolymer family; formulation or filler changes",
+      "additives": "see material name"
+    },
+    "ABS-GF": {
+      "structure_key": "abs_graft",
+      "structural_relation": "same ABS graft/terpolymer family; formulation or filler changes",
+      "additives": "see material name"
+    },
+    "ABS FR": {
+      "structure_key": "abs_graft",
+      "structural_relation": "same ABS graft/terpolymer family; formulation or filler changes",
+      "additives": "see material name"
+    },
+    "ABS ESD": {
+      "structure_key": "abs_graft",
+      "structural_relation": "same ABS graft/terpolymer family; formulation or filler changes",
+      "additives": "see material name"
+    },
+    "ABS Conductive": {
+      "structure_key": "abs_graft",
+      "structural_relation": "same ABS graft/terpolymer family; formulation or filler changes",
+      "additives": "see material name"
+    },
+    "Recycled ABS": {
+      "structure_key": "abs_graft",
+      "structural_relation": "same ABS graft/terpolymer family; formulation or filler changes",
+      "additives": "see material name"
+    },
+    "ASA-CF": {
+      "structure_key": "asa_graft",
+      "structural_relation": "same ASA graft/terpolymer family; formulation or filler changes",
+      "additives": "see material name"
+    },
+    "ASA-GF": {
+      "structure_key": "asa_graft",
+      "structural_relation": "same ASA graft/terpolymer family; formulation or filler changes",
+      "additives": "see material name"
+    },
+    "ASA FR": {
+      "structure_key": "asa_graft",
+      "structural_relation": "same ASA graft/terpolymer family; formulation or filler changes",
+      "additives": "see material name"
+    },
+    "ASA ESD": {
+      "structure_key": "asa_graft",
+      "structural_relation": "same ASA graft/terpolymer family; formulation or filler changes",
+      "additives": "see material name"
+    },
+    "Recycled ASA": {
+      "structure_key": "asa_graft",
+      "structural_relation": "same ASA graft/terpolymer family; formulation or filler changes",
+      "additives": "see material name"
+    },
+    "TPU 90A": {
+      "structure_key": "tpu_segmented",
+      "structural_relation": "same segmented TPU family; hardness, soft/hard segment ratio, filler or additive varies",
+      "additives": "see material name"
+    },
+    "TPU 85A": {
+      "structure_key": "tpu_segmented",
+      "structural_relation": "same segmented TPU family; hardness, soft/hard segment ratio, filler or additive varies",
+      "additives": "see material name"
+    },
+    "TPU 80A": {
+      "structure_key": "tpu_segmented",
+      "structural_relation": "same segmented TPU family; hardness, soft/hard segment ratio, filler or additive varies",
+      "additives": "see material name"
+    },
+    "TPU 70A": {
+      "structure_key": "tpu_segmented",
+      "structural_relation": "same segmented TPU family; hardness, soft/hard segment ratio, filler or additive varies",
+      "additives": "see material name"
+    },
+    "TPU HF": {
+      "structure_key": "tpu_segmented",
+      "structural_relation": "same segmented TPU family; hardness, soft/hard segment ratio, filler or additive varies",
+      "additives": "see material name"
+    },
+    "TPU-CF": {
+      "structure_key": "tpu_segmented",
+      "structural_relation": "same segmented TPU family; hardness, soft/hard segment ratio, filler or additive varies",
+      "additives": "see material name"
+    },
+    "TPU-GF": {
+      "structure_key": "tpu_segmented",
+      "structural_relation": "same segmented TPU family; hardness, soft/hard segment ratio, filler or additive varies",
+      "additives": "see material name"
+    },
+    "Conductive TPU": {
+      "structure_key": "tpu_segmented",
+      "structural_relation": "same segmented TPU family; hardness, soft/hard segment ratio, filler or additive varies",
+      "additives": "see material name"
+    },
+    "Bio-based TPU": {
+      "structure_key": "tpu_segmented",
+      "structural_relation": "same segmented TPU family; hardness, soft/hard segment ratio, filler or additive varies",
+      "additives": "see material name"
+    },
+    "Soft PLA": {
+      "structure_key": "soft_pla"
+    },
+    "PA6": {
+      "structure_key": "pa6"
+    },
+    "PA6-CF": {
+      "structure_key": "pa6",
+      "structural_relation": "PA6 base resin with filler/additive; not a new PA6 repeat unit",
+      "additives": "see material name"
+    },
+    "PA6-GF": {
+      "structure_key": "pa6",
+      "structural_relation": "PA6 base resin with filler/additive; not a new PA6 repeat unit",
+      "additives": "see material name"
+    },
+    "PA6 FR": {
+      "structure_key": "pa6",
+      "structural_relation": "PA6 base resin with filler/additive; not a new PA6 repeat unit",
+      "additives": "see material name"
+    },
+    "PA6 ESD": {
+      "structure_key": "pa6",
+      "structural_relation": "PA6 base resin with filler/additive; not a new PA6 repeat unit",
+      "additives": "see material name"
+    },
+    "PA11": {
+      "structure_key": "pa11"
+    },
+    "PA11-CF": {
+      "structure_key": "pa11",
+      "structural_relation": "PA11 base resin with filler",
+      "additives": "see material name"
+    },
+    "PA11-GF": {
+      "structure_key": "pa11",
+      "structural_relation": "PA11 base resin with filler",
+      "additives": "see material name"
+    },
+    "PA12": {
+      "structure_key": "pa12"
+    },
+    "PA12-CF": {
+      "structure_key": "pa12",
+      "structural_relation": "PA12 base resin with filler",
+      "additives": "see material name"
+    },
+    "PA12-GF": {
+      "structure_key": "pa12",
+      "structural_relation": "PA12 base resin with filler",
+      "additives": "see material name"
+    },
+    "PA66": {
+      "structure_key": "pa66"
+    },
+    "PA66-CF": {
+      "structure_key": "pa66",
+      "structural_relation": "PA66 base resin with filler",
+      "additives": "see material name"
+    },
+    "PA66-GF": {
+      "structure_key": "pa66",
+      "structural_relation": "PA66 base resin with filler",
+      "additives": "see material name"
+    },
+    "PA610": {
+      "structure_key": "pa610"
+    },
+    "PA612": {
+      "structure_key": "pa612"
+    },
+    "PA Copolymer": {
+      "structure_key": "pa_copolymer"
+    },
+    "PAHT": {
+      "structure_key": "paht"
+    },
+    "PAHT-CF": {
+      "structure_key": "paht",
+      "structural_relation": "PAHT base resin with filler; exact PAHT chemistry varies by grade",
+      "additives": "see material name"
+    },
+    "PAHT-GF": {
+      "structure_key": "paht",
+      "structural_relation": "PAHT base resin with filler; exact PAHT chemistry varies by grade",
+      "additives": "see material name"
+    },
+    "PPA": {
+      "structure_key": "ppa"
+    },
+    "PPA-CF": {
+      "structure_key": "ppa",
+      "structural_relation": "PPA base resin with filler; exact PPA chemistry varies by grade",
+      "additives": "see material name"
+    },
+    "PPA-GF": {
+      "structure_key": "ppa",
+      "structural_relation": "PPA base resin with filler; exact PPA chemistry varies by grade",
+      "additives": "see material name"
+    },
+    "PC Blend": {
+      "structure_key": "pc_blend_generic"
+    },
+    "PC-CF": {
+      "structure_key": "pc",
+      "structural_relation": "PC base resin with filler/additive; not a different PC repeat unit",
+      "additives": "see material name"
+    },
+    "PC-GF": {
+      "structure_key": "pc",
+      "structural_relation": "PC base resin with filler/additive; not a different PC repeat unit",
+      "additives": "see material name"
+    },
+    "PC-FR": {
+      "structure_key": "pc",
+      "structural_relation": "PC base resin with filler/additive; not a different PC repeat unit",
+      "additives": "see material name"
+    },
+    "ESD PC": {
+      "structure_key": "pc",
+      "structural_relation": "PC base resin with filler/additive; not a different PC repeat unit",
+      "additives": "see material name"
+    },
+    "PC-ABS": {
+      "structure_key": "pc_abs_blend"
+    },
+    "PC-PBT": {
+      "structure_key": "pc_pbt_blend"
+    },
+    "PC-PET": {
+      "structure_key": "pc_pet_blend"
+    },
+    "PC-PTFE": {
+      "structure_key": "pc_ptfe_blend"
+    },
+    "PPS-CF": {
+      "structure_key": "pps",
+      "structural_relation": "PPS base resin with filler; not a new PPS repeat unit",
+      "additives": "see material name"
+    },
+    "PPS-GF": {
+      "structure_key": "pps",
+      "structural_relation": "PPS base resin with filler; not a new PPS repeat unit",
+      "additives": "see material name"
+    },
+    "PEEK-CF": {
+      "structure_key": "peek",
+      "structural_relation": "PEEK base resin with filler; not a new PEEK repeat unit",
+      "additives": "see material name"
+    },
+    "PEEK-GF": {
+      "structure_key": "peek",
+      "structural_relation": "PEEK base resin with filler; not a new PEEK repeat unit",
+      "additives": "see material name"
+    },
+    "PEKK-CF": {
+      "structure_key": "pekk",
+      "structural_relation": "PEKK base resin with filler; not a new PEKK repeat unit",
+      "additives": "see material name"
+    },
+    "PEKK-GF": {
+      "structure_key": "pekk",
+      "structural_relation": "PEKK base resin with filler; not a new PEKK repeat unit",
+      "additives": "see material name"
+    },
+    "PEI-CF": {
+      "structure_key": "pei",
+      "structural_relation": "PEI base resin with filler; not a new PEI repeat unit",
+      "additives": "see material name"
+    },
+    "PEI-GF": {
+      "structure_key": "pei",
+      "structural_relation": "PEI base resin with filler; not a new PEI repeat unit",
+      "additives": "see material name"
+    },
+    "Support PLA": {
+      "structure_key": "pla",
+      "structural_relation": "PLA-derived support formulation; exact support additives are product-specific"
+    },
+    "Support ABS": {
+      "structure_key": "abs_graft",
+      "structural_relation": "ABS-compatible support formulation; exact support chemistry is product-specific"
+    },
+    "Support PETG": {
+      "structure_key": "petg_copolyester",
+      "structural_relation": "PETG-compatible support formulation; exact support chemistry is product-specific"
+    },
+    "Support PA": {
+      "structure_key": "pa_generic",
+      "structural_relation": "polyamide support/ESD formulation; exact base nylon grade can vary"
+    },
+    "ESD PA": {
+      "structure_key": "pa_generic",
+      "structural_relation": "polyamide support/ESD formulation; exact base nylon grade can vary"
+    },
+    "Support PC": {
+      "structure_key": "pc",
+      "structural_relation": "PC-compatible support formulation; exact support chemistry is product-specific"
+    },
+    "PVA": {
+      "structure_key": "pva"
+    },
+    "BVOH": {
+      "structure_key": "bvoh"
+    },
+    "HIPS Support": {
+      "structure_key": "hips",
+      "structural_relation": "HIPS material used as a removable support; base chemistry remains HIPS"
+    },
+    "Support Breakaway": {
+      "structure_key": "support_breakaway"
+    },
+    "PP-CF": {
+      "structure_key": "pp",
+      "structural_relation": "PP base resin with filler; not a new PP repeat unit",
+      "additives": "see material name"
+    },
+    "PP-GF": {
+      "structure_key": "pp",
+      "structural_relation": "PP base resin with filler; not a new PP repeat unit",
+      "additives": "see material name"
+    },
+    "Carbon Fiber Filled": {
+      "structure_key": "modifier_only",
+      "structural_relation": "modifier/category only; a base polymer is required"
+    },
+    "Glass Fiber Filled": {
+      "structure_key": "modifier_only",
+      "structural_relation": "modifier/category only; a base polymer is required"
+    },
+    "Aramid Fiber Filled": {
+      "structure_key": "modifier_only",
+      "structural_relation": "modifier/category only; a base polymer is required"
+    },
+    "Basalt Fiber Filled": {
+      "structure_key": "modifier_only",
+      "structural_relation": "modifier/category only; a base polymer is required"
+    },
+    "Mineral Filled": {
+      "structure_key": "modifier_only",
+      "structural_relation": "modifier/category only; a base polymer is required"
+    },
+    "Ceramic Filled": {
+      "structure_key": "modifier_only",
+      "structural_relation": "modifier/category only; a base polymer is required"
+    },
+    "Metal Filled": {
+      "structure_key": "modifier_only",
+      "structural_relation": "modifier/category only; a base polymer is required"
+    },
+    "Copper Filled": {
+      "structure_key": "modifier_only",
+      "structural_relation": "modifier/category only; a base polymer is required"
+    },
+    "Bronze Filled": {
+      "structure_key": "modifier_only",
+      "structural_relation": "modifier/category only; a base polymer is required"
+    },
+    "Brass Filled": {
+      "structure_key": "modifier_only",
+      "structural_relation": "modifier/category only; a base polymer is required"
+    },
+    "Aluminum Filled": {
+      "structure_key": "modifier_only",
+      "structural_relation": "modifier/category only; a base polymer is required"
+    },
+    "Iron Filled": {
+      "structure_key": "modifier_only",
+      "structural_relation": "modifier/category only; a base polymer is required"
+    },
+    "Steel Filled": {
+      "structure_key": "modifier_only",
+      "structural_relation": "modifier/category only; a base polymer is required"
+    },
+    "Tungsten Filled": {
+      "structure_key": "modifier_only",
+      "structural_relation": "modifier/category only; a base polymer is required"
+    },
+    "Wood Filled": {
+      "structure_key": "modifier_only",
+      "structural_relation": "modifier/category only; a base polymer is required"
+    },
+    "Cork Filled": {
+      "structure_key": "modifier_only",
+      "structural_relation": "modifier/category only; a base polymer is required"
+    },
+    "Bamboo Filled": {
+      "structure_key": "modifier_only",
+      "structural_relation": "modifier/category only; a base polymer is required"
+    },
+    "Coffee Filled": {
+      "structure_key": "modifier_only",
+      "structural_relation": "modifier/category only; a base polymer is required"
+    },
+    "Hemp Filled": {
+      "structure_key": "modifier_only",
+      "structural_relation": "modifier/category only; a base polymer is required"
+    },
+    "Shell Filled": {
+      "structure_key": "modifier_only",
+      "structural_relation": "modifier/category only; a base polymer is required"
+    }
+  }
+}

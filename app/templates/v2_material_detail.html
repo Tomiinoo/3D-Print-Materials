@@ -1,0 +1,324 @@
+{% extends "base.html" %}
+{% block title %}{{ material.name }} — Material Lab V2{% endblock %}
+
+{% block content %}
+{% macro evidence_record(record, label, kind, show_value=False) %}
+  <div class="evidence-record evidence-record--{{ kind }}">
+    <div class="evidence-record__top">
+      <div>
+        <span class="evidence-record__label">{{ label }}</span>
+        {% if show_value %}
+          <strong class="evidence-record__value">{{ record.value }}</strong>
+        {% endif %}
+      </div>
+
+      {% if record.is_primary %}
+        <span class="evidence-pill evidence-pill--primary">Primary</span>
+      {% endif %}
+    </div>
+
+    <div class="evidence-facts">
+      <div class="evidence-fact">
+        <span>Source type</span>
+        <strong>{{ record.source_type }}</strong>
+      </div>
+
+      <div class="evidence-fact">
+        <span>Confidence</span>
+        <strong>{{ record.confidence }}</strong>
+      </div>
+
+      <div class="evidence-fact">
+        <span>Material state</span>
+        <strong>{{ record.material_state }}</strong>
+      </div>
+
+      {% if record.source_title %}
+        <div class="evidence-fact evidence-fact--wide">
+          <span>Source title</span>
+          <strong>{{ record.source_title }}</strong>
+        </div>
+      {% endif %}
+
+      {% if record.test_standard %}
+        <div class="evidence-fact">
+          <span>Test standard</span>
+          <strong>{{ record.test_standard }}</strong>
+        </div>
+      {% endif %}
+
+      {% if record.test_condition %}
+        <div class="evidence-fact evidence-fact--wide">
+          <span>Test condition</span>
+          <strong>{{ record.test_condition }}</strong>
+        </div>
+      {% endif %}
+
+      {% if record.observed_on %}
+        <div class="evidence-fact">
+          <span>Recorded</span>
+          <strong>{{ record.observed_on }}</strong>
+        </div>
+      {% endif %}
+    </div>
+
+    {% if record.notes %}
+      <details class="evidence-note-box">
+        <summary>Notes and caveats</summary>
+        <p>{{ record.notes }}</p>
+      </details>
+    {% endif %}
+
+    {% if record.source_url %}
+      <p class="evidence-link">
+        <a class="text-link" target="_blank" rel="noopener" href="{{ record.source_url }}">
+          Open recorded source
+        </a>
+      </p>
+    {% endif %}
+  </div>
+{% endmacro %}
+
+<section class="material-hero" style="--material-color: {{ material.family_color }}">
+  <div class="material-hero-copy">
+    <a class="back-link" href="/v2/materials">← Back to V2 materials</a>
+
+    <div class="hero-tags">
+      <span class="family-pill">{{ material.family }}</span>
+      <span class="subfamily-pill {% if 'Carbon' in material.classification %}cf{% elif 'Glass' in material.classification %}gf{% endif %}">
+        {{ material.classification }}
+      </span>
+      <span class="status-chip {% if material.quality_kind == 'legacy' %}warning{% elif material.quality_kind == 'missing' %}muted{% endif %}">
+        {{ material.quality_label }}
+      </span>
+    </div>
+
+    <h1>{{ material.name }}</h1>
+    <h2>{{ material.full_name }}</h2>
+    <p>{{ material.description or "No description recorded yet." }}</p>
+  </div>
+
+  <div class="molecule-card">
+    <span>POLYMER FORMULA</span>
+    <strong>{{ material.formula or "—" }}</strong>
+    <div class="repeat-unit">{{ material.repeat_unit or "No repeat unit recorded" }}</div>
+    <small>Reference identity for this material variant</small>
+  </div>
+</section>
+
+<section class="stat-band">
+  <article>
+    <span>Density</span>
+    <b>{% if material.primary.get("density") %}{{ material.primary.get("density").value }}{% else %}—{% endif %}</b>
+    <small>{% if material.primary.get("density") %}{{ material.primary.get("density").source_type }} · {{ material.primary.get("density").confidence }}{% else %}No record yet{% endif %}</small>
+  </article>
+
+  <article>
+    <span>HDT</span>
+    <b>{% if material.primary.get("heat_deflection_temperature") %}{{ material.primary.get("heat_deflection_temperature").value }}{% else %}—{% endif %}</b>
+    <small>{% if material.primary.get("heat_deflection_temperature") %}{{ material.primary.get("heat_deflection_temperature").source_type }} · {{ material.primary.get("heat_deflection_temperature").confidence }}{% else %}No record yet{% endif %}</small>
+  </article>
+
+  <article>
+    <span>Continuous service</span>
+    <b>{% if material.primary.get("continuous_service_temperature") %}{{ material.primary.get("continuous_service_temperature").value }}{% else %}—{% endif %}</b>
+    <small>{% if material.primary.get("continuous_service_temperature") %}{{ material.primary.get("continuous_service_temperature").source_type }} · {{ material.primary.get("continuous_service_temperature").confidence }}{% else %}No record yet{% endif %}</small>
+  </article>
+
+  <article>
+    <span>Property records</span>
+    <b>{{ material.record_count }}</b>
+    <small>{{ material.verified_count }} verified / medium+ · {{ material.legacy_count }} legacy imported</small>
+  </article>
+</section>
+
+{% include "partials/_polymer_chemistry_card.html" %}
+
+<section class="detail-grid">
+  <article class="panel decision-panel good">
+    <span class="eyebrow">CHOOSE IT FOR</span>
+    <h3>{{ material.best_for or "Add intended applications." }}</h3>
+  </article>
+
+  <article class="panel decision-panel bad">
+    <span class="eyebrow">DO NOT CHOOSE IT FOR</span>
+    <h3>{{ material.avoid_for or "Add limitations and unsuitable uses." }}</h3>
+  </article>
+</section>
+
+<section class="section-heading anchored" id="properties">
+  <div>
+    <span class="eyebrow">TRACEABLE ENGINEERING PROPERTIES</span>
+    <h2>Values, state and origin</h2>
+  </div>
+  <button class="button secondary" data-toggle="add-v2-property" data-reset-form="add-v2-property">+ Add sourced property</button>
+</section>
+
+<div class="expand-box" id="add-v2-property" hidden>
+  <form action="/v2/materials/{{ material.slug }}/properties" method="post" class="form-grid v2-property-form" autocomplete="off">
+    <label>
+      Property
+      <select required name="property_definition_id">
+        {% for definition in property_definitions %}
+          <option value="{{ definition.id }}">
+            {{ definition.name }}{% if definition.default_unit %} ({{ definition.default_unit }}){% endif %}
+          </option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label>
+      Single numeric value
+      <input type="number" step="any" name="value_number" placeholder="102">
+    </label>
+
+    <label>
+      Range minimum
+      <input type="number" step="any" name="value_min" placeholder="95">
+    </label>
+
+    <label>
+      Range maximum
+      <input type="number" step="any" name="value_max" placeholder="109">
+    </label>
+
+    <label>
+      Or text value
+      <input name="value_text" placeholder="~102 MPa dry">
+    </label>
+
+    <label>
+      Unit
+      <input name="unit" placeholder="Uses the property default when empty">
+    </label>
+
+    <label>
+      Material state
+      <select name="material_state">
+        <option value="unknown">Unknown</option>
+        <option value="dry">Dry</option>
+        <option value="conditioned">Conditioned</option>
+        <option value="wet">Wet</option>
+      </select>
+    </label>
+
+    <label>
+      Source type
+      <select name="source_type">
+        <option value="manufacturer_tds">Manufacturer TDS</option>
+        <option value="manufacturer_page">Manufacturer page</option>
+        <option value="paper">Paper / literature</option>
+        <option value="user_measurement">Personal measurement</option>
+        <option value="estimated">Estimated</option>
+        <option value="other">Other</option>
+      </select>
+    </label>
+
+    <label>
+      Confidence
+      <select name="confidence">
+        <option value="high">High</option>
+        <option value="medium" selected>Medium</option>
+        <option value="low">Low</option>
+      </select>
+    </label>
+
+    <label>
+      Observed / published date
+      <input type="date" name="observed_on_v2" data-no-default-date autocomplete="off" value="">
+    </label>
+
+    <label class="span-all">
+      Source title
+      <input required name="source_title" placeholder="Bambu Lab PA6-CF Technical Data Sheet">
+    </label>
+
+    <label class="span-all">
+      Source URL
+      <input type="url" name="source_url" placeholder="https://...">
+    </label>
+
+    <label>
+      Test standard
+      <input name="test_standard" placeholder="ASTM D638 / ISO 527">
+    </label>
+
+    <label>
+      Test condition
+      <input name="test_condition" placeholder="Dry, XY orientation, 23 C">
+    </label>
+
+    <label class="check-label">
+      <input type="checkbox" name="is_primary">
+      Prefer this record in the summary
+    </label>
+
+    <label class="span-all">
+      Notes
+      <textarea name="notes" placeholder="Grade, fibre content, specimen details, limitations, manufacturer caveats?"></textarea>
+    </label>
+
+    <div class="form-actions span-all">
+      <button class="button primary" type="submit">Save traceable property</button>
+    </div>
+  </form>
+</div>
+
+<section class="panel properties-panel">
+  <div class="panel-title">
+    <span class="eyebrow">PROPERTY RECORDS</span>
+    <h2>Saved values and evidence</h2>
+  </div>
+
+  <div class="engineering-callout warning-callout">
+    <strong>Read values in context:</strong>
+    a property without a controlled material state, standard, grade and print orientation is useful as a reference, not as a certified design value.
+  </div>
+
+  <div class="evidence-list">
+    {% for group in material.property_groups %}
+      {% set property = group.preferred %}
+      <article class="evidence-card evidence-card--{{ group.selection_kind }}">
+        <div class="evidence-card__head">
+          <div>
+            <span class="eyebrow">{{ group.category | replace("_", " ") | title }}</span>
+            <h3>{{ group.name }}</h3>
+          </div>
+
+          <div class="evidence-value-box">
+            <span>Selected value</span>
+            <strong>{{ property.value }}</strong>
+          </div>
+        </div>
+
+        <div class="evidence-card__body">
+          {{ evidence_record(property, group.selection_label, group.selection_kind) }}
+
+          {% if group.alternatives %}
+            <details class="evidence-alternatives">
+              <summary>
+                <span>Other evidence</span>
+                <b>{{ group.alternatives | length }}</b>
+              </summary>
+
+              <div class="evidence-alternative-list">
+                {% for alternative in group.alternatives %}
+                  {{ evidence_record(alternative, "Alternative evidence", "alternative", true) }}
+                {% endfor %}
+              </div>
+            </details>
+          {% endif %}
+        </div>
+      </article>
+    {% else %}
+      <div class="empty-state">No V2 property records exist for this material yet.</div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="source-footnote">
+  <strong>Material notes:</strong>
+  {{ material.source_notes or "No source notes recorded yet." }}
+  New records always remain alongside older values. Mark one as primary only when it should be preferred in the summary.
+</section>
+{% endblock %}

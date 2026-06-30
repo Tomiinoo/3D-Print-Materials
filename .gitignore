@@ -1,0 +1,26 @@
+﻿# Personal Material Lab data — never commit
+/data/
+/app/data/
+/backups/
+/uploads/
+*.sqlite
+*.sqlite3
+*.db
+
+# Environment files and secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# Build and runtime artefacts
+*.log
+dist/
+build/

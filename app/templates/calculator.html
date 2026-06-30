@@ -10,10 +10,15 @@
     <div class="panel-title"><span class="eyebrow">PRINT INPUTS</span><h2>Part, support and waste</h2></div>
     <label class="span-all">Exact filament product<select required id="calc-product" name="product_id">{% for product in products %}<option value="{{ product.id }}">{{ product.material_name }} — {{ product.brand }} {{ product.product_name }}{% if product.price_per_kg %} · €{{ '%.2f'|format(product.price_per_kg) }}/kg{% else %} · no price yet{% endif %}</option>{% endfor %}</select></label>
     <div class="calculator-product-info" id="calculator-product-info">Choose a spool to see density and tracked €/kg.</div>
-    <label>Model volume (mm³)<input required type="number" id="calc-model-volume" name="model_volume_mm3" min="0" step="1" value="100000"></label>
-    <label>Support volume (mm³)<input type="number" id="calc-support-volume" name="support_volume_mm3" min="0" step="1" value="0"></label>
-    <label>Purge / prime material (g)<input type="number" id="calc-purge" name="purge_g" min="0" step="0.1" value="0"></label>
-    <label>Waste allowance (%)<input type="number" id="calc-waste" name="waste_percent" min="0" step="1" value="3"></label>
+    <div class="calculator-mode span-all" role="radiogroup" aria-label="Calculation mode">
+      <label><input type="radio" name="calc_mode" value="volume" checked> From slicer volume</label>
+      <label><input type="radio" name="calc_mode" value="grams"> From used grams</label>
+    </div>
+    <label data-calc-volume>Model volume (mm³)<input required type="number" id="calc-model-volume" name="model_volume_mm3" min="0" step="1" value="100000"></label>
+    <label data-calc-volume>Support volume (mm³)<input type="number" id="calc-support-volume" name="support_volume_mm3" min="0" step="1" value="0"></label>
+    <label data-calc-volume>Purge / prime material (g)<input type="number" id="calc-purge" name="purge_g" min="0" step="0.1" value="0"></label>
+    <label data-calc-volume>Waste allowance (%)<input type="number" id="calc-waste" name="waste_percent" min="0" step="1" value="3"></label>
+    <label class="span-all" data-calc-grams hidden>Filament used (g)<input type="number" id="calc-used-g" name="used_g" min="0" step="0.1" placeholder="150.0" disabled></label>
     <label>Printer energy (kWh)<input type="number" id="calc-energy" name="energy_kwh" min="0" step="0.01" value="0"></label>
     <label>Electricity (€/kWh)<input type="number" id="calc-electricity" name="electricity_eur_kwh" min="0" step="0.01" value="0.30"></label>
     <button class="button primary span-all" type="submit">Calculate realistic material cost →</button>

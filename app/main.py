@@ -89,6 +89,18 @@ def clean_text(value: str | None) -> str:
     return (value or "").strip()
 
 
+def parse_form_date(value: str | date | None, field_name: str) -> date:
+    if isinstance(value, date):
+        return value
+    cleaned = clean_text(value)
+    if not cleaned:
+        return date.today()
+    try:
+        return date.fromisoformat(cleaned)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"{field_name} is invalid.") from exc
+
+
 def text_has(text: str, *needles: str) -> bool:
     return any(needle in text for needle in needles)
 
@@ -450,6 +462,13 @@ def product_price(product: FilamentProduct) -> tuple[float | None, float | None,
     return entry.price_eur, price_per_kg, entry.observed_on
 
 
+def product_filament_usage(product: FilamentProduct) -> tuple[float, float, float]:
+    used_g = sum(max(0, profile.filament_used_g or 0) for profile in product.print_profiles)
+    remaining_g = max(0, (product.spool_weight_g or 0) - used_g)
+    remaining_percent = (remaining_g / product.spool_weight_g * 100) if product.spool_weight_g else 0
+    return used_g, remaining_g, remaining_percent
+
+
 def display_spool_code(product: FilamentProduct) -> str:
     return product.spool_code or f"S-{product.id:03d}"
 
@@ -503,6 +522,7 @@ def ensure_unique_spool_code(
 
 def product_payload(product: FilamentProduct) -> dict[str, Any]:
     latest, per_kg, observed = product_price(product)
+    used_g, remaining_g, remaining_percent = product_filament_usage(product)
     return {
         "id": product.id,
         "material_id": product.material_id,
@@ -518,6 +538,9 @@ def product_payload(product: FilamentProduct) -> dict[str, Any]:
         "favorite": product.favorite,
         "is_active": product.is_active,
         "profile_count": len(product.print_profiles),
+        "filament_used_g": used_g,
+        "remaining_g": remaining_g,
+        "remaining_percent": remaining_percent,
         "buy_again_label": "Would buy again" if product.favorite else "Needs more evidence",
         "latest_price_eur": latest,
         "price_per_kg": per_kg,
@@ -857,6 +880,7 @@ def profile_payload(profile: PrintProfile) -> dict[str, Any]:
         "product_name": f"{profile.product.brand} {profile.product.product_name}" if profile.product else None,
         "product_spool_code": display_spool_code(profile.product) if profile.product else None,
         "product_spool_path": spool_path(profile.product) if profile.product else None,
+        "edit_path": f"/profiles/{profile.id}/edit",
     }
 
 
@@ -885,6 +909,7 @@ def page(request: Request, template: str, **context: Any):
             ("Settings", "/settings", "settings"),
         ],
         "score_labels": SCORE_LABELS,
+        "today": date.today().isoformat(),
     }
     defaults.update(context)
     return templates.TemplateResponse(template, defaults)
@@ -1246,6 +1271,7 @@ def add_product(
     spool_code: str = Form(""),
     spool_weight_g: float = Form(1000),
     first_price_eur: float | None = Form(None),
+    first_price_observed_on: str = Form(""),
     notes: str = Form(""),
     favorite: bool = Form(False),
     session: Session = Depends(get_session),
@@ -1267,7 +1293,12 @@ def add_product(
         ensure_unique_spool_code(session, generated_spool_code, current_product_id=product.id)
         product.spool_code = generated_spool_code
     if first_price_eur is not None and first_price_eur > 0:
-        session.add(PriceEntry(product_id=product.id, price_eur=first_price_eur, observed_on=date.today(), source_label="Initial manual price"))
+        session.add(PriceEntry(
+            product_id=product.id,
+            price_eur=first_price_eur,
+            observed_on=parse_form_date(first_price_observed_on, "Initial price date"),
+            source_label="Initial manual price",
+        ))
     session.commit()
     return RedirectResponse(f"/materials/{slug}#products", status_code=303)
 
@@ -1445,7 +1476,7 @@ def add_profile(
     filament_used_g: float = Form(0),
     result_rating: int = Form(3),
     notes: str = Form(""),
-    printed_on: date = Form(date.today()),
+    printed_on: str = Form(""),
     session: Session = Depends(get_session),
 ):
     material = session.scalar(select(Material).where(Material.slug == slug))
@@ -1467,11 +1498,139 @@ def add_profile(
         nozzle_diameter=nozzle_diameter, nozzle_temp=nozzle_temp, bed_temp=bed_temp, chamber_temp=chamber_temp,
         speed_mm_s=speed_mm_s, dryer_temp=dryer_temp, dryer_hours=dryer_hours, build_plate=build_plate.strip(),
         filament_used_g=max(0, filament_used_g), result_rating=max(1, min(5, result_rating)),
-        notes=notes.strip(), printed_on=printed_on,
+        notes=notes.strip(), printed_on=parse_form_date(printed_on, "Print date"),
     )
     session.add(profile)
     session.commit()
     return RedirectResponse(f"/materials/{slug}#profiles", status_code=303)
+
+
+@app.get("/profiles/{profile_id}/edit")
+def edit_profile_form(profile_id: int, request: Request, session: Session = Depends(get_session)):
+    profile = session.scalar(
+        select(PrintProfile)
+        .options(
+            selectinload(PrintProfile.material),
+            selectinload(PrintProfile.product),
+            selectinload(PrintProfile.printer),
+        )
+        .where(PrintProfile.id == profile_id)
+    )
+    if not profile:
+        raise HTTPException(status_code=404, detail="Print result not found")
+    materials = list(
+        session.scalars(
+            select(Material)
+            .where(Material.is_active.is_(True))
+            .order_by(Material.family, Material.name)
+        )
+    )
+    products = list(
+        session.scalars(
+            select(FilamentProduct)
+            .options(selectinload(FilamentProduct.material))
+            .where(FilamentProduct.is_active.is_(True))
+            .order_by(FilamentProduct.brand, FilamentProduct.product_name, FilamentProduct.id)
+        )
+    )
+    product_options = [
+        {
+            "id": product.id,
+            "material_id": product.material_id,
+            "label": f"{display_spool_code(product)} - {product.material.name} - {product.brand} {product.product_name}",
+        }
+        for product in products
+    ]
+    printers = active_printers(session)
+    return page(
+        request,
+        "profile_form.html",
+        page_name="inventory",
+        profile=profile,
+        materials=materials,
+        products=product_options,
+        printers=printers,
+    )
+
+
+@app.post("/profiles/{profile_id}/edit")
+def update_profile(
+    profile_id: int,
+    material_id: int = Form(...),
+    profile_name: str = Form(...),
+    product_id: str = Form(""),
+    printer_id: str = Form(""),
+    state: str = Form("Dry"),
+    nozzle_diameter: float = Form(0.4),
+    nozzle_temp: float = Form(0),
+    bed_temp: float = Form(0),
+    chamber_temp: float = Form(0),
+    speed_mm_s: float = Form(0),
+    dryer_temp: float = Form(0),
+    dryer_hours: float = Form(0),
+    build_plate: str = Form(""),
+    filament_used_g: float = Form(0),
+    result_rating: int = Form(3),
+    notes: str = Form(""),
+    printed_on: str = Form(""),
+    session: Session = Depends(get_session),
+):
+    profile = session.get(PrintProfile, profile_id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="Print result not found")
+    product_pk = int(product_id) if clean_text(product_id) else None
+    printer_pk = int(printer_id) if clean_text(printer_id) else None
+    material_pk = material_id
+    if product_pk is not None:
+        product = session.get(FilamentProduct, product_pk)
+        if not product or not product.is_active:
+            raise HTTPException(status_code=404, detail="Spool not found")
+        material_pk = product.material_id
+    else:
+        material = session.scalar(select(Material).where(Material.id == material_pk, Material.is_active.is_(True)))
+        if not material:
+            raise HTTPException(status_code=404, detail="Material not found")
+    if printer_pk is not None:
+        printer = session.get(PrinterPreset, printer_pk)
+        if not printer or not printer.is_active:
+            raise HTTPException(status_code=404, detail="Printer preset not found")
+
+    profile.material_id = material_pk
+    profile.product_id = product_pk
+    profile.printer_id = printer_pk
+    profile.profile_name = profile_name.strip()
+    profile.state = state
+    profile.nozzle_diameter = nozzle_diameter
+    profile.nozzle_temp = nozzle_temp
+    profile.bed_temp = bed_temp
+    profile.chamber_temp = chamber_temp
+    profile.speed_mm_s = speed_mm_s
+    profile.dryer_temp = dryer_temp
+    profile.dryer_hours = dryer_hours
+    profile.build_plate = build_plate.strip()
+    profile.filament_used_g = max(0, filament_used_g)
+    profile.result_rating = max(1, min(5, result_rating))
+    profile.notes = notes.strip()
+    profile.printed_on = parse_form_date(printed_on, "Print date")
+    session.commit()
+
+    material = session.get(Material, profile.material_id)
+    return RedirectResponse(f"/materials/{material.slug}#profiles" if material else "/inventory", status_code=303)
+
+
+@app.post("/profiles/{profile_id}/delete")
+def delete_profile(profile_id: int, session: Session = Depends(get_session)):
+    profile = session.scalar(
+        select(PrintProfile)
+        .options(selectinload(PrintProfile.material))
+        .where(PrintProfile.id == profile_id)
+    )
+    if not profile:
+        raise HTTPException(status_code=404, detail="Print result not found")
+    material_slug = profile.material.slug if profile.material else ""
+    session.delete(profile)
+    session.commit()
+    return RedirectResponse(f"/materials/{material_slug}#profiles" if material_slug else "/inventory", status_code=303)
 
 
 @app.get("/guide")
@@ -1534,11 +1693,26 @@ def inventory_page(request: Request, session: Session = Depends(get_session)):
             .order_by(PrintProfile.printed_on.desc(), PrintProfile.id.desc())
         )
     )
+    active_products_payload = [
+        {**product_payload(p), "material_name": p.material.name, "material_slug": p.material.slug}
+        for p in active_rows
+    ]
+    archived_products_payload = [
+        {**product_payload(p), "material_name": p.material.name, "material_slug": p.material.slug}
+        for p in archived_rows
+    ]
     return page(
         request, "inventory.html", page_name="inventory",
-        products=[{**product_payload(p), "material_name": p.material.name, "material_slug": p.material.slug} for p in active_rows],
-        archived_products=[{**product_payload(p), "material_name": p.material.name, "material_slug": p.material.slug} for p in archived_rows],
+        products=active_products_payload,
+        archived_products=archived_products_payload,
         profiles=[{**profile_payload(p), "material_name": p.material.name, "material_slug": p.material.slug} for p in profiles],
+        inventory_stats={
+            "active_spools": len(active_products_payload),
+            "archived_spools": len(archived_products_payload),
+            "remaining_g": sum(product["remaining_g"] for product in active_products_payload),
+            "used_g": sum(product["filament_used_g"] for product in active_products_payload),
+            "print_results": len(profiles),
+        },
     )
 
 
@@ -1616,10 +1790,11 @@ def api_material(slug: str, session: Session = Depends(get_session)):
 @app.get("/api/calculate")
 def api_calculate(
     product_id: int,
-    model_volume_mm3: float,
+    model_volume_mm3: float = 0,
     support_volume_mm3: float = 0,
     purge_g: float = 0,
     waste_percent: float = 0,
+    used_g: float | None = None,
     energy_kwh: float = 0,
     electricity_eur_kwh: float = 0,
     session: Session = Depends(get_session),
@@ -1633,10 +1808,17 @@ def api_calculate(
         raise HTTPException(status_code=404, detail="Product not found")
     props = parse_json(product.material.properties_json)
     density = float(props.get("density_g_cm3", 1.0))
-    raw_part_g = max(0, model_volume_mm3) * density / 1000
-    raw_support_g = max(0, support_volume_mm3) * density / 1000
-    before_waste_g = raw_part_g + raw_support_g + max(0, purge_g)
-    total_g = before_waste_g * (1 + max(0, waste_percent) / 100)
+    if used_g is not None and used_g > 0:
+        raw_part_g = max(0, used_g)
+        raw_support_g = 0
+        total_g = raw_part_g
+        purge_mass_g = 0
+    else:
+        raw_part_g = max(0, model_volume_mm3) * density / 1000
+        raw_support_g = max(0, support_volume_mm3) * density / 1000
+        purge_mass_g = max(0, purge_g)
+        before_waste_g = raw_part_g + raw_support_g + purge_mass_g
+        total_g = before_waste_g * (1 + max(0, waste_percent) / 100)
     _, price_per_kg, _ = product_price(product)
     material_cost = (total_g / 1000 * price_per_kg) if price_per_kg is not None else None
     energy_cost = max(0, energy_kwh) * max(0, electricity_eur_kwh)
@@ -1646,7 +1828,7 @@ def api_calculate(
         "density_g_cm3": density,
         "part_mass_g": round(raw_part_g, 2),
         "support_mass_g": round(raw_support_g, 2),
-        "purge_mass_g": round(max(0, purge_g), 2),
+        "purge_mass_g": round(purge_mass_g, 2),
         "total_mass_g": round(total_g, 2),
         "price_per_kg": round(price_per_kg, 2) if price_per_kg is not None else None,
         "material_cost_eur": round(material_cost, 2) if material_cost is not None else None,

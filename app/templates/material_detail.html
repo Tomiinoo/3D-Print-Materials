@@ -192,6 +192,7 @@
           <label>Spool number<input name="spool_code" placeholder="Leave blank for next {{ material.name }} number"></label>
           <label>Spool mass (g)<input required type="number" min="1" step="1" name="spool_weight_g" value="1000"></label>
           <label>Initial spool price (€)<input type="number" min="0" step="0.01" name="first_price_eur" placeholder="24.99"></label>
+          <label>Initial price date<input type="date" name="first_price_observed_on" value="{{ today }}"></label>
         </div>
       </div>
     </section>
@@ -228,6 +229,8 @@
   <article class="product-card">
     <div class="product-card-head"><div><a class="eyebrow spool-code-link" href="{{ product.spool_path }}">{{ product.spool_code }}</a><h3>{{ product.product_name }}</h3><p>{{ product.brand }} · {{ product.supplier or 'No supplier noted' }}{% if product.color_name %} · {{ product.color_name }}{% endif %}</p></div>{% if product.favorite %}<span class="favorite">★ Preferred</span>{% endif %}</div>
     <div class="price-block">{% if product.price_per_kg %}<span>Current tracked price</span><strong>€{{ '%.2f'|format(product.price_per_kg) }}<small>/kg</small></strong><p>€{{ '%.2f'|format(product.latest_price_eur) }} per {{ product.spool_weight_g|int }} g · {{ product.price_observed_on }}</p>{% else %}<span>No price logged yet</span><strong>—</strong>{% endif %}</div>
+    <div class="spool-usage"><span style="width: {{ product.remaining_percent }}%"></span></div>
+    <p class="spool-usage-label">{{ '%.1f'|format(product.remaining_g) }} g left · {{ '%.1f'|format(product.filament_used_g) }} g used</p>
     {% if product.notes %}<p class="product-note">{{ product.notes }}</p>{% endif %}
     <div class="product-actions">
       <a class="text-link" href="{{ product.spool_path }}">Inspect spool</a>
@@ -240,7 +243,7 @@
     <form id="price-{{ product.id }}" action="/products/{{ product.id }}/prices" method="post" class="price-form" hidden>
       <input type="hidden" name="return_to" value="/materials/{{ material.slug }}#products">
       <label>Spool price (€)<input type="number" name="price_eur" min="0" step="0.01" required></label>
-      <label>Date<input type="date" name="observed_on"></label>
+      <label>Date<input type="date" name="observed_on" value="{{ today }}"></label>
       <label>Source<input name="source_label" placeholder="Manual / sale / supplier"></label>
       <label>Stock note<input name="stock_note" placeholder="e.g. 5 kg bulk sale"></label>
       <button class="button small" type="submit">Save price</button>
@@ -260,7 +263,7 @@
 <div class="expand-box" id="add-profile" hidden>
 <form action="/materials/{{ material.slug }}/profiles" method="post" class="form-grid">
   <label>Profile name<input required name="profile_name" placeholder="0.6 TC — bracket test — dried"></label>
-  <label>Exact spool<select name="product_id"><option value="">Generic {{ material.name }}</option>{% for product in material.products %}<option value="{{ product.id }}">{{ product.spool_code }} — {{ product.brand }} — {{ product.product_name }}</option>{% endfor %}</select></label>
+  <label>Exact spool<select name="product_id"><option value="">Generic {{ material.name }}</option>{% for product in material.products %}<option value="{{ product.id }}">{{ product.spool_code }} — {{ product.brand }} — {{ product.product_name }} — {{ '%.1f'|format(product.remaining_g) }} g left</option>{% endfor %}</select></label>
   <label>Printer<select name="printer_id"><option value="">Not specified</option>{% for printer in printers %}<option value="{{ printer.id }}">{{ printer.name }}</option>{% endfor %}</select></label>
   <label>Material state<select name="state"><option>Dry</option><option>Conditioned / wet</option></select></label>
   <label>Nozzle diameter (mm)<input type="number" step="0.1" name="nozzle_diameter" value="0.4"></label>
@@ -273,7 +276,7 @@
   <label>Filament used (g)<input type="number" min="0" step="0.1" name="filament_used_g" placeholder="42.5"></label>
   <label>Build plate<input name="build_plate" placeholder="Textured PEI / Engineering plate"></label>
   <label>Result rating<select name="result_rating"><option value="5">5 — excellent</option><option value="4">4 — good</option><option value="3" selected>3 — usable</option><option value="2">2 — weak / needs work</option><option value="1">1 — failed</option></select></label>
-  <label>Print date<input type="date" name="printed_on"></label>
+  <label>Print date<input type="date" name="printed_on" value="{{ today }}"></label>
   <label class="span-all">Notes / what happened<textarea name="notes" placeholder="Warping, layer adhesion, finish, stress direction, what you would change next…"></textarea></label>
   <div class="form-actions span-all"><button class="button primary" type="submit">Save test profile</button></div>
 </form>
@@ -283,7 +286,7 @@
 {% for profile in profiles %}
   <article class="profile-card">
     <div class="profile-score">{{ profile.result_rating }}/5</div>
-    <div><h3>{{ profile.profile_name }}</h3><p>{% if profile.product_spool_path %}<a class="text-link" href="{{ profile.product_spool_path }}">{{ profile.product_spool_code }} · {{ profile.product_name }}</a>{% else %}{{ profile.product_name or 'Generic material profile' }}{% endif %} · {{ profile.printer_name or 'No printer saved' }} · {{ profile.state }} · {{ profile.printed_on }}</p><div class="profile-specs"><span>{{ profile.nozzle_diameter }} mm nozzle</span><span>{{ profile.nozzle_temp }} °C nozzle</span><span>{{ profile.bed_temp }} °C bed</span><span>{{ profile.chamber_temp }} °C chamber</span><span>{{ profile.speed_mm_s }} mm/s</span>{% if profile.filament_used_g %}<span>{{ '%.1f'|format(profile.filament_used_g) }} g used</span>{% endif %}</div>{% if profile.notes %}<p class="profile-note">{{ profile.notes }}</p>{% endif %}</div>
+    <div><h3>{{ profile.profile_name }}</h3><p>{% if profile.product_spool_path %}<a class="text-link" href="{{ profile.product_spool_path }}">{{ profile.product_spool_code }} · {{ profile.product_name }}</a>{% else %}{{ profile.product_name or 'Generic material profile' }}{% endif %} · {{ profile.printer_name or 'No printer saved' }} · {{ profile.state }} · {{ profile.printed_on }}</p><div class="profile-specs"><span>{{ profile.nozzle_diameter }} mm nozzle</span><span>{{ profile.nozzle_temp }} °C nozzle</span><span>{{ profile.bed_temp }} °C bed</span><span>{{ profile.chamber_temp }} °C chamber</span><span>{{ profile.speed_mm_s }} mm/s</span>{% if profile.filament_used_g %}<span>{{ '%.1f'|format(profile.filament_used_g) }} g used</span>{% endif %}</div><div class="card-actions"><a class="text-link" href="{{ profile.edit_path }}">Edit print result</a></div>{% if profile.notes %}<p class="profile-note">{{ profile.notes }}</p>{% endif %}</div>
   </article>
 {% else %}
   <div class="empty-state">No saved print result yet. Add the first test after you choose an exact spool and printer.</div>

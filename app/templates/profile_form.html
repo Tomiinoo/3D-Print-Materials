@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Edit print result - Material Lab{% endblock %}
+{% block content %}
+<section class="page-hero compact">
+  <div>
+    <span class="eyebrow">EDIT PRINT RESULT</span>
+    <h1>{{ profile.profile_name }}</h1>
+    <p>{{ profile.material.name }}{% if profile.product %} · {{ profile.product.spool_code }} · {{ profile.product.brand }} {{ profile.product.product_name }}{% endif %}</p>
+  </div>
+  <a class="button secondary" href="/materials/{{ profile.material.slug }}#profiles">Back to material</a>
+</section>
+
+<form class="material-form panel" action="/profiles/{{ profile.id }}/edit" method="post">
+  <div class="panel-title">
+    <span class="eyebrow">TEST RECORD</span>
+    <h2>Correct saved print settings</h2>
+  </div>
+  <section class="form-grid">
+    <label>Profile name<input required name="profile_name" value="{{ profile.profile_name }}"></label>
+    <label>Material
+      <select name="material_id">
+        {% for material in materials %}
+          <option value="{{ material.id }}" {% if material.id == profile.material_id %}selected{% endif %}>{{ material.name }} - {{ material.full_name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="span-all">Exact spool
+      <select name="product_id">
+        <option value="">Generic material profile</option>
+        {% for product in products %}
+          <option value="{{ product.id }}" {% if profile.product_id == product.id %}selected{% endif %}>{{ product.label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Printer
+      <select name="printer_id">
+        <option value="">Not specified</option>
+        {% for printer in printers %}
+          <option value="{{ printer.id }}" {% if profile.printer_id == printer.id %}selected{% endif %}>{{ printer.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Material state<select name="state"><option {% if profile.state == 'Dry' %}selected{% endif %}>Dry</option><option {% if profile.state == 'Conditioned / wet' %}selected{% endif %}>Conditioned / wet</option></select></label>
+    <label>Print date<input type="date" name="printed_on" value="{{ profile.printed_on.isoformat() }}"></label>
+    <label>Result rating<select name="result_rating"><option value="5" {% if profile.result_rating == 5 %}selected{% endif %}>5 - excellent</option><option value="4" {% if profile.result_rating == 4 %}selected{% endif %}>4 - good</option><option value="3" {% if profile.result_rating == 3 %}selected{% endif %}>3 - usable</option><option value="2" {% if profile.result_rating == 2 %}selected{% endif %}>2 - weak / needs work</option><option value="1" {% if profile.result_rating == 1 %}selected{% endif %}>1 - failed</option></select></label>
+    <label>Nozzle diameter (mm)<input type="number" step="0.1" name="nozzle_diameter" value="{{ profile.nozzle_diameter }}"></label>
+    <label>Nozzle temp (&deg;C)<input type="number" name="nozzle_temp" value="{{ profile.nozzle_temp }}"></label>
+    <label>Bed temp (&deg;C)<input type="number" name="bed_temp" value="{{ profile.bed_temp }}"></label>
+    <label>Chamber temp (&deg;C)<input type="number" name="chamber_temp" value="{{ profile.chamber_temp }}"></label>
+    <label>Speed (mm/s)<input type="number" name="speed_mm_s" value="{{ profile.speed_mm_s }}"></label>
+    <label>Dryer temp (&deg;C)<input type="number" name="dryer_temp" value="{{ profile.dryer_temp }}"></label>
+    <label>Dryer time (hours)<input type="number" step="0.5" name="dryer_hours" value="{{ profile.dryer_hours }}"></label>
+    <label>Filament used (g)<input type="number" min="0" step="0.1" name="filament_used_g" value="{{ profile.filament_used_g }}"></label>
+    <label>Build plate<input name="build_plate" value="{{ profile.build_plate }}"></label>
+    <label class="span-all">Notes / what happened<textarea name="notes">{{ profile.notes }}</textarea></label>
+  </section>
+  <div class="form-actions">
+    <a class="button secondary" href="/materials/{{ profile.material.slug }}#profiles">Cancel</a>
+    <button class="button primary" type="submit">Save print result</button>
+  </div>
+</form>
+
+<section class="source-footnote spool-danger-zone">
+  <strong>Delete mistaken print result</strong>
+  <form action="/profiles/{{ profile.id }}/delete" method="post" class="source-actions" onsubmit="return confirm('Delete this saved print result forever?');">
+    <button class="button secondary danger-button" type="submit">Delete print result</button>
+  </form>
+</section>
+{% endblock %}

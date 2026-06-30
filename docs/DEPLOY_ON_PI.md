@@ -7,17 +7,17 @@ Before deploying anything, back up the Pi data folder. The app code is replaceab
 ## Option A — recommended: Docker Compose on Raspberry Pi OS / Debian
 
 1. Install Docker Engine and the Docker Compose plugin on the Pi.
-2. Copy the extracted `material-lab` folder to the Pi, for example to `/opt/material-lab`.
+2. Copy the extracted `material-lab` folder to the Pi at `/home/pipi/material-lab`.
 3. Make sure the persistent data folder exists:
 
 ```bash
-mkdir -p /opt/material-lab/data
+mkdir -p /home/pipi/material-lab/data
 ```
 
 4. Run:
 
 ```bash
-cd /opt/material-lab
+cd /home/pipi/material-lab
 docker compose up -d --build
 docker compose ps
 docker compose logs -f
@@ -34,7 +34,7 @@ Docker Compose sets `MATERIAL_LAB_DATA_DIR=/data` inside the container and maps 
 So the Pi database lives at:
 
 ```text
-/opt/material-lab/data/material_lab.sqlite3
+/home/pipi/material-lab/data/material_lab.sqlite3
 ```
 
 The first start creates that database if it does not exist. Never delete the `data` directory unless you want to reset the app.
@@ -56,25 +56,19 @@ Safe release update flow:
 
 1. Test the code locally.
 2. Review git diff.
-3. Back up `/opt/material-lab/data`.
+3. Back up `/home/pipi/material-lab/data`.
 4. Pull or copy the reviewed code on the Pi.
 5. Rebuild and restart the Docker Compose app.
 6. Check the container logs and Alembic revision.
 7. Open the app and verify materials, inventory, prices and settings.
 
-Exact update commands for a Git checkout on the Pi:
+Exact one-command update for a Git checkout on the Pi:
 
 ```bash
-cd /opt/material-lab
-tar -czf material-lab-data-backup-$(date +%Y%m%d-%H%M%S).tar.gz data
-git pull --ff-only
-docker compose build material-lab
-docker compose up -d material-lab
-docker compose logs --tail=120 material-lab
-docker compose exec material-lab alembic current
+cd /home/pipi/material-lab && ./scripts/deploy-material-lab.sh v2.2
 ```
 
-If you update by copying files instead of Git, replace `git pull --ff-only` with your copy step, then run the same Docker commands.
+Replace `v2.2` with the Git tag you want to deploy. The script refuses a dirty working tree, backs up `/home/pipi/material-lab/data` to `/home/pipi/`, fetches tags, checks out the requested tag, rebuilds the Docker Compose app, and waits for `http://127.0.0.1:8080/` to return HTTP 200.
 
 This rebuilds the app container. It must not delete the database because the database is in the mounted `data` folder.
 
@@ -85,7 +79,7 @@ Rollback should restore both the old application code and the matching database 
 Use the backup created before the release:
 
 ```bash
-cd /opt/material-lab
+cd /home/pipi/material-lab
 docker compose down
 mv data data.failed-$(date +%Y%m%d-%H%M%S)
 tar -xzf /path/to/material-lab-data-backup-YYYYMMDD-HHMMSS.tar.gz
@@ -100,12 +94,12 @@ The `mv data ...` step keeps the failed-release database for inspection instead 
 
 ### Migration verification before release
 
-These checks use temporary host folders mounted as `/data`. They do not touch `/opt/material-lab/data`.
+These checks use temporary host folders mounted as `/data`. They do not touch `/home/pipi/material-lab/data`.
 
 Build the image to test:
 
 ```bash
-cd /opt/material-lab
+cd /home/pipi/material-lab
 docker build -t material-lab:verify .
 ```
 
@@ -159,7 +153,7 @@ The third check reuses `old_dir` after the second check has migrated it. It prov
 Example:
 
 ```bash
-cd /opt/material-lab
+cd /home/pipi/material-lab
 tar -czf material-lab-data-backup-$(date +%Y%m%d-%H%M%S).tar.gz data
 ```
 

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Edit {{ product.spool_code }} - Material Lab{% endblock %}
+{% block content %}
+<section class="page-hero compact">
+  <div>
+    <span class="eyebrow">EDIT EXACT SPOOL</span>
+    <h1>{{ product.spool_code }}</h1>
+    <p>{{ product.brand }} {{ product.product_name }} under {{ product.material_name }}</p>
+  </div>
+  <a class="button secondary" href="{{ product.spool_path }}">Back to spool</a>
+</section>
+
+<form class="material-form panel" action="{{ product.spool_path }}/edit" method="post">
+  <div class="panel-title">
+    <span class="eyebrow">PHYSICAL INVENTORY</span>
+    <h2>Correct spool data</h2>
+  </div>
+  <section class="form-grid">
+    <label class="span-all">Material
+      <select name="material_id" required>
+        {% for material in materials %}
+          <option value="{{ material.id }}" {% if material.id == product.material_id %}selected{% endif %}>{{ material.name }} - {{ material.full_name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Spool number<input required name="new_spool_code" value="{{ product.spool_code }}"></label>
+    <label>Brand<input required name="brand" value="{{ product.brand }}"></label>
+    <label>Exact product<input required name="product_name" value="{{ product.product_name }}"></label>
+    <label>Colour<input name="color_name" value="{{ product.color_name }}"></label>
+    <label>Spool mass (g)<input required type="number" min="1" step="1" name="spool_weight_g" value="{{ product.spool_weight_g|int }}"></label>
+    <label>Supplier / shop<input name="supplier" value="{{ product.supplier }}"></label>
+    <label class="span-all">Product URL<input type="url" name="url" value="{{ product.url }}"></label>
+    <label class="check-label"><input type="checkbox" name="favorite" {% if product.favorite %}checked{% endif %}> Preferred / would buy again</label>
+    <label class="check-label"><input type="checkbox" name="is_active" {% if product.is_active %}checked{% endif %}> Active inventory</label>
+    <label class="span-all">Notes<textarea name="notes">{{ product.notes }}</textarea></label>
+  </section>
+  <div class="form-actions">
+    <a class="button secondary" href="{{ product.spool_path }}">Cancel</a>
+    <button class="button primary" type="submit">Save changes</button>
+  </div>
+</form>
+
+<section class="source-footnote spool-danger-zone">
+  <strong>Permanent delete</strong>
+  <form action="/products/{{ product.id }}/delete" method="post" class="source-actions" onsubmit="return confirm('Delete this exact spool and its price history forever? Print results will stay saved without this spool link.');">
+    <input type="hidden" name="return_to" value="/inventory">
+    <button class="button secondary danger-button" type="submit">Delete spool forever</button>
+  </form>
+</section>
+{% endblock %}

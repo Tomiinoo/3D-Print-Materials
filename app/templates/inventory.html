@@ -32,7 +32,7 @@
       <tbody>
         {% for product in products %}
           <tr>
-            <td><strong>{{ product.spool_code }}</strong></td>
+            <td><a class="text-link spool-code-link" href="{{ product.spool_path }}"><strong>{{ product.spool_code }}</strong></a></td>
             <td><a href="/materials/{{ product.material_slug }}">{{ product.material_name }}</a></td>
             <td><strong>{{ product.brand }}</strong><br><small>{{ product.product_name }}{% if product.color_name %} · {{ product.color_name }}{% endif %}</small></td>
             <td>{{ product.supplier or '—' }}</td>
@@ -41,10 +41,18 @@
             <td>{% if product.latest_price_eur %}€{{ '%.2f'|format(product.latest_price_eur) }}{% else %}—{% endif %}</td>
             <td>{% if product.favorite %}<span class="favorite">★ Preferred</span>{% else %}<span class="status-chip muted">Active</span>{% endif %}</td>
             <td>
-              <form action="/products/{{ product.id }}/archive" method="post" class="inline-form">
-                <input type="hidden" name="return_to" value="/inventory#archived">
-                <button class="text-link danger-link" type="submit">Archive</button>
-              </form>
+              <div class="table-actions">
+                <a class="text-link" href="{{ product.spool_path }}">Inspect</a>
+                <a class="text-link" href="{{ product.spool_path }}/edit">Edit</a>
+                <form action="/products/{{ product.id }}/archive" method="post" class="inline-form">
+                  <input type="hidden" name="return_to" value="/inventory#archived">
+                  <button class="text-link danger-link" type="submit">Archive</button>
+                </form>
+                <form action="/products/{{ product.id }}/delete" method="post" class="inline-form" onsubmit="return confirm('Delete this exact spool and its price history forever? Print results will stay saved without this spool link.');">
+                  <input type="hidden" name="return_to" value="/inventory">
+                  <button class="text-link danger-link" type="submit">Delete</button>
+                </form>
+              </div>
             </td>
           </tr>
         {% else %}
@@ -65,7 +73,7 @@
   {% for product in products %}
     <article class="buy-again-card {% if product.favorite %}is-favorite{% endif %}">
       <div>
-        <span class="eyebrow">{{ product.spool_code }}</span>
+        <a class="eyebrow spool-code-link" href="{{ product.spool_path }}">{{ product.spool_code }}</a>
         <h3><a href="/materials/{{ product.material_slug }}">{{ product.material_name }}</a></h3>
         <p>{{ product.brand }} · {{ product.product_name }}{% if product.supplier %} · {{ product.supplier }}{% endif %}</p>
       </div>
@@ -73,6 +81,10 @@
         <span>{% if product.favorite %}Would buy again{% else %}Not marked yet{% endif %}</span>
         <span>{% if product.price_per_kg %}€{{ '%.2f'|format(product.price_per_kg) }}/kg{% else %}No tracked price{% endif %}</span>
         <span>{{ product.profile_count }} print result{% if product.profile_count != 1 %}s{% endif %}</span>
+      </div>
+      <div class="card-actions">
+        <a class="text-link" href="{{ product.spool_path }}">Inspect spool</a>
+        <a class="text-link" href="{{ product.spool_path }}/edit">Edit</a>
       </div>
       {% if product.notes %}<p class="product-note">{{ product.notes }}</p>{% endif %}
     </article>
@@ -104,16 +116,24 @@
       <tbody>
         {% for product in archived_products %}
           <tr>
-            <td><strong>{{ product.spool_code }}</strong></td>
+            <td><a class="text-link spool-code-link" href="{{ product.spool_path }}"><strong>{{ product.spool_code }}</strong></a></td>
             <td><a href="/materials/{{ product.material_slug }}">{{ product.material_name }}</a></td>
             <td><strong>{{ product.brand }}</strong><br><small>{{ product.product_name }}{% if product.color_name %} · {{ product.color_name }}{% endif %}</small></td>
             <td>{{ product.supplier or '—' }}</td>
             <td>{% if product.latest_price_eur %}€{{ '%.2f'|format(product.latest_price_eur) }}{% else %}—{% endif %}</td>
             <td>
-              <form action="/products/{{ product.id }}/restore" method="post" class="inline-form">
-                <input type="hidden" name="return_to" value="/inventory#archived">
-                <button class="text-link" type="submit">Restore</button>
-              </form>
+              <div class="table-actions">
+                <a class="text-link" href="{{ product.spool_path }}">Inspect</a>
+                <a class="text-link" href="{{ product.spool_path }}/edit">Edit</a>
+                <form action="/products/{{ product.id }}/restore" method="post" class="inline-form">
+                  <input type="hidden" name="return_to" value="/inventory#archived">
+                  <button class="text-link" type="submit">Restore</button>
+                </form>
+                <form action="/products/{{ product.id }}/delete" method="post" class="inline-form" onsubmit="return confirm('Delete this exact spool and its price history forever? Print results will stay saved without this spool link.');">
+                  <input type="hidden" name="return_to" value="/inventory#archived">
+                  <button class="text-link danger-link" type="submit">Delete</button>
+                </form>
+              </div>
             </td>
           </tr>
         {% else %}
@@ -127,7 +147,22 @@
 <section class="section-heading"><div><span class="eyebrow">PRINT RESULTS</span><h2>Saved material settings</h2></div></section>
 <section class="profile-list">
 {% for profile in profiles %}
-  <article class="profile-card"><div class="profile-score">{{ profile.result_rating }}/5</div><div><h3><a href="/materials/{{ profile.material_slug }}">{{ profile.material_name }}</a> — {{ profile.profile_name }}</h3><p>{{ profile.product_name or 'Generic material profile' }} · {{ profile.printer_name or 'No printer saved' }} · {{ profile.state }} · {{ profile.printed_on }}</p><div class="profile-specs"><span>{{ profile.nozzle_diameter }} mm</span><span>{{ profile.nozzle_temp }} °C nozzle</span><span>{{ profile.bed_temp }} °C bed</span><span>{{ profile.chamber_temp }} °C chamber</span><span>{{ profile.speed_mm_s }} mm/s</span>{% if profile.filament_used_g %}<span>{{ '%.1f'|format(profile.filament_used_g) }} g used</span>{% endif %}</div>{% if profile.notes %}<p class="profile-note">{{ profile.notes }}</p>{% endif %}</div></article>
+  <article class="profile-card">
+    <div class="profile-score">{{ profile.result_rating }}/5</div>
+    <div>
+      <h3><a href="/materials/{{ profile.material_slug }}">{{ profile.material_name }}</a> — {{ profile.profile_name }}</h3>
+      <p>
+        {% if profile.product_spool_path %}
+          <a class="text-link" href="{{ profile.product_spool_path }}">{{ profile.product_spool_code }} · {{ profile.product_name }}</a>
+        {% else %}
+          {{ profile.product_name or 'Generic material profile' }}
+        {% endif %}
+        · {{ profile.printer_name or 'No printer saved' }} · {{ profile.state }} · {{ profile.printed_on }}
+      </p>
+      <div class="profile-specs"><span>{{ profile.nozzle_diameter }} mm</span><span>{{ profile.nozzle_temp }} °C nozzle</span><span>{{ profile.bed_temp }} °C bed</span><span>{{ profile.chamber_temp }} °C chamber</span><span>{{ profile.speed_mm_s }} mm/s</span>{% if profile.filament_used_g %}<span>{{ '%.1f'|format(profile.filament_used_g) }} g used</span>{% endif %}</div>
+      {% if profile.notes %}<p class="profile-note">{{ profile.notes }}</p>{% endif %}
+    </div>
+  </article>
 {% else %}<div class="empty-state">No tests logged yet. Open a material, add an exact spool, then save the first print result with printer, filament used and notes.</div>{% endfor %}
 </section>
 {% endblock %}

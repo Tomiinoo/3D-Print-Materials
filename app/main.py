@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
@@ -449,6 +450,57 @@ def product_price(product: FilamentProduct) -> tuple[float | None, float | None,
     return entry.price_eur, price_per_kg, entry.observed_on
 
 
+def display_spool_code(product: FilamentProduct) -> str:
+    return product.spool_code or f"S-{product.id:03d}"
+
+
+def normalized_spool_code(value: str | None) -> str:
+    return re.sub(r"[^a-z0-9]", "", clean_text(value).lower())
+
+
+def spool_path(product: FilamentProduct) -> str:
+    return f"/spools/{quote(display_spool_code(product), safe='')}"
+
+
+def product_detail_options():
+    return (
+        selectinload(FilamentProduct.material),
+        selectinload(FilamentProduct.price_entries),
+        selectinload(FilamentProduct.print_profiles).selectinload(PrintProfile.material),
+        selectinload(FilamentProduct.print_profiles).selectinload(PrintProfile.printer),
+    )
+
+
+def product_by_spool_code(session: Session, spool_code: str) -> FilamentProduct | None:
+    target = normalized_spool_code(spool_code)
+    if not target:
+        return None
+    products = session.scalars(
+        select(FilamentProduct)
+        .options(*product_detail_options())
+        .order_by(FilamentProduct.id.desc())
+    )
+    for product in products:
+        if normalized_spool_code(display_spool_code(product)) == target:
+            return product
+    return None
+
+
+def ensure_unique_spool_code(
+    session: Session,
+    spool_code: str,
+    current_product_id: int | None = None,
+) -> None:
+    target = normalized_spool_code(spool_code)
+    if not target:
+        return
+    for product in session.scalars(select(FilamentProduct).order_by(FilamentProduct.id)):
+        if current_product_id is not None and product.id == current_product_id:
+            continue
+        if normalized_spool_code(display_spool_code(product)) == target:
+            raise HTTPException(status_code=409, detail="This spool number already exists.")
+
+
 def product_payload(product: FilamentProduct) -> dict[str, Any]:
     latest, per_kg, observed = product_price(product)
     return {
@@ -459,7 +511,8 @@ def product_payload(product: FilamentProduct) -> dict[str, Any]:
         "supplier": product.supplier,
         "url": product.url,
         "color_name": product.color_name,
-        "spool_code": product.spool_code or f"S-{product.id:03d}",
+        "spool_code": display_spool_code(product),
+        "spool_path": spool_path(product),
         "spool_weight_g": product.spool_weight_g,
         "notes": product.notes,
         "favorite": product.favorite,
@@ -480,6 +533,20 @@ def product_payload(product: FilamentProduct) -> dict[str, Any]:
             for p in sorted(product.price_entries, key=lambda x: (x.observed_on, x.id), reverse=True)
         ],
     }
+
+
+def spool_page_payload(product: FilamentProduct) -> dict[str, Any]:
+    payload = product_payload(product)
+    payload.update(
+        {
+            "material_name": product.material.name,
+            "material_slug": product.material.slug,
+            "material_full_name": product.material.full_name,
+            "material_family": product.material.family,
+            "material_color": product.material.family_color,
+        }
+    )
+    return payload
 
 
 def material_price_range(products: list[FilamentProduct]) -> dict[str, Any]:
@@ -788,6 +855,8 @@ def profile_payload(profile: PrintProfile) -> dict[str, Any]:
         "notes": profile.notes,
         "printed_on": profile.printed_on.isoformat(),
         "product_name": f"{profile.product.brand} {profile.product.product_name}" if profile.product else None,
+        "product_spool_code": display_spool_code(profile.product) if profile.product else None,
+        "product_spool_path": spool_path(profile.product) if profile.product else None,
     }
 
 
@@ -1184,18 +1253,103 @@ def add_product(
     material = session.scalar(select(Material).where(Material.slug == slug))
     if not material:
         raise HTTPException(status_code=404, detail="Material not found")
+    cleaned_spool_code = clean_text(spool_code)
+    if cleaned_spool_code:
+        ensure_unique_spool_code(session, cleaned_spool_code)
     product = FilamentProduct(
         material_id=material.id, brand=brand.strip(), product_name=product_name.strip(), supplier=supplier.strip(), url=url.strip(),
-        color_name=color_name.strip(), spool_code=clean_text(spool_code), spool_weight_g=spool_weight_g, notes=notes.strip(), favorite=favorite,
+        color_name=color_name.strip(), spool_code=cleaned_spool_code, spool_weight_g=spool_weight_g, notes=notes.strip(), favorite=favorite,
     )
     session.add(product)
     session.flush()
     if not product.spool_code:
-        product.spool_code = f"S-{product.id:03d}"
+        generated_spool_code = f"S-{product.id:03d}"
+        ensure_unique_spool_code(session, generated_spool_code, current_product_id=product.id)
+        product.spool_code = generated_spool_code
     if first_price_eur is not None and first_price_eur > 0:
         session.add(PriceEntry(product_id=product.id, price_eur=first_price_eur, observed_on=date.today(), source_label="Initial manual price"))
     session.commit()
     return RedirectResponse(f"/materials/{slug}#products", status_code=303)
+
+
+@app.get("/spools/{spool_code}")
+def spool_detail(spool_code: str, request: Request, session: Session = Depends(get_session)):
+    product = product_by_spool_code(session, spool_code)
+    if not product:
+        raise HTTPException(status_code=404, detail="Spool not found")
+    profiles = [profile_payload(profile) for profile in product.print_profiles]
+    return page(
+        request,
+        "spool_detail.html",
+        page_name="inventory",
+        product=spool_page_payload(product),
+        profiles=profiles,
+    )
+
+
+@app.get("/spools/{spool_code}/edit")
+def edit_spool_form(spool_code: str, request: Request, session: Session = Depends(get_session)):
+    product = product_by_spool_code(session, spool_code)
+    if not product:
+        raise HTTPException(status_code=404, detail="Spool not found")
+    materials = list(
+        session.scalars(
+            select(Material)
+            .where(Material.is_active.is_(True))
+            .order_by(Material.family, Material.name)
+        )
+    )
+    return page(
+        request,
+        "spool_form.html",
+        page_name="inventory",
+        product=spool_page_payload(product),
+        materials=materials,
+    )
+
+
+@app.post("/spools/{spool_code}/edit")
+def update_spool(
+    spool_code: str,
+    material_id: int = Form(...),
+    brand: str = Form(...),
+    product_name: str = Form(...),
+    supplier: str = Form(""),
+    url: str = Form(""),
+    color_name: str = Form(""),
+    new_spool_code: str = Form(""),
+    spool_weight_g: float = Form(1000),
+    notes: str = Form(""),
+    favorite: bool = Form(False),
+    is_active: bool = Form(False),
+    session: Session = Depends(get_session),
+):
+    product = product_by_spool_code(session, spool_code)
+    if not product:
+        raise HTTPException(status_code=404, detail="Spool not found")
+    material = session.scalar(select(Material).where(Material.id == material_id, Material.is_active.is_(True)))
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found")
+    if spool_weight_g <= 0:
+        raise HTTPException(status_code=400, detail="Spool mass must be greater than zero.")
+
+    cleaned_spool_code = clean_text(new_spool_code) or display_spool_code(product)
+    ensure_unique_spool_code(session, cleaned_spool_code, current_product_id=product.id)
+    product.material_id = material.id
+    for profile in product.print_profiles:
+        profile.material_id = material.id
+    product.brand = brand.strip()
+    product.product_name = product_name.strip()
+    product.supplier = supplier.strip()
+    product.url = url.strip()
+    product.color_name = color_name.strip()
+    product.spool_code = cleaned_spool_code
+    product.spool_weight_g = spool_weight_g
+    product.notes = notes.strip()
+    product.favorite = favorite
+    product.is_active = is_active
+    session.commit()
+    return RedirectResponse(spool_path(product), status_code=303)
 
 
 @app.post("/products/{product_id}/archive")
@@ -1228,24 +1382,49 @@ def restore_product(
     return RedirectResponse(return_to or "/inventory#archived", status_code=303)
 
 
+@app.post("/products/{product_id}/delete")
+def delete_product(
+    product_id: int,
+    return_to: str = Form("/inventory"),
+    session: Session = Depends(get_session),
+):
+    product = session.scalar(
+        select(FilamentProduct)
+        .options(selectinload(FilamentProduct.print_profiles))
+        .where(FilamentProduct.id == product_id)
+    )
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    for profile in product.print_profiles:
+        profile.product_id = None
+    session.delete(product)
+    session.commit()
+    return RedirectResponse(return_to or "/inventory", status_code=303)
+
+
 @app.post("/products/{product_id}/prices")
 def add_price(
     product_id: int,
     price_eur: float = Form(...),
-    observed_on: date = Form(date.today()),
+    observed_on: str = Form(""),
     source_label: str = Form("Manual entry"),
     stock_note: str = Form(""),
+    return_to: str = Form(""),
     session: Session = Depends(get_session),
 ):
     product = session.get(FilamentProduct, product_id)
     if not product or not product.is_active:
         raise HTTPException(status_code=404, detail="Product not found")
+    try:
+        observed_date = date.fromisoformat(clean_text(observed_on)) if clean_text(observed_on) else date.today()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Price date is invalid.") from exc
     session.add(PriceEntry(
-        product_id=product_id, price_eur=price_eur, observed_on=observed_on,
+        product_id=product_id, price_eur=price_eur, observed_on=observed_date,
         source_label=source_label.strip(), stock_note=stock_note.strip(),
     ))
     session.commit()
-    return RedirectResponse(f"/materials/{product.material.slug}#products", status_code=303)
+    return RedirectResponse(return_to or f"/materials/{product.material.slug}#products", status_code=303)
 
 
 @app.post("/materials/{slug}/profiles")

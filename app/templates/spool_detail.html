@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}{{ product.spool_code }} - Material Lab{% endblock %}
+{% block content %}
+<section class="material-hero spool-hero" style="--material-color: {{ product.material_color }}">
+  <div class="material-hero-copy">
+    <a class="back-link" href="/inventory">&larr; Back to inventory</a>
+    <div class="hero-tags">
+      <span class="family-pill">{{ product.material_family }}</span>
+      {% if product.is_active %}<span class="status-chip">Active</span>{% else %}<span class="status-chip muted">Archived</span>{% endif %}
+      {% if product.favorite %}<span class="favorite">Preferred</span>{% endif %}
+    </div>
+    <h1>{{ product.spool_code }}</h1>
+    <h2>{{ product.brand }} {{ product.product_name }}</h2>
+    <p>
+      <a class="text-link" href="/materials/{{ product.material_slug }}">{{ product.material_name }}</a>
+      {% if product.color_name %} &middot; {{ product.color_name }}{% endif %}
+      {% if product.supplier %} &middot; {{ product.supplier }}{% endif %}
+    </p>
+    <div class="spool-hero-actions">
+      <a class="button primary" href="{{ product.spool_path }}/edit">Edit spool</a>
+      <a class="button secondary" href="/materials/{{ product.material_slug }}#products">Material inventory</a>
+      {% if product.url %}<a class="button secondary" target="_blank" rel="noopener" href="{{ product.url }}">Open supplier</a>{% endif %}
+      {% if product.is_active %}
+        <form action="/products/{{ product.id }}/archive" method="post" class="inline-form">
+          <input type="hidden" name="return_to" value="{{ product.spool_path }}">
+          <button class="button secondary" type="submit">Archive</button>
+        </form>
+      {% else %}
+        <form action="/products/{{ product.id }}/restore" method="post" class="inline-form">
+          <input type="hidden" name="return_to" value="{{ product.spool_path }}">
+          <button class="button secondary" type="submit">Restore</button>
+        </form>
+      {% endif %}
+      <form action="/products/{{ product.id }}/delete" method="post" class="inline-form" onsubmit="return confirm('Delete this exact spool and its price history forever? Print results will stay saved without this spool link.');">
+        <input type="hidden" name="return_to" value="/inventory">
+        <button class="button secondary danger-button" type="submit">Delete forever</button>
+      </form>
+    </div>
+  </div>
+  <div class="molecule-card spool-id-card">
+    <span>EXACT PHYSICAL SPOOL</span>
+    <strong>{{ product.spool_code }}</strong>
+    <div class="repeat-unit">{{ product.material_name }} / {{ product.brand }}</div>
+    <small>{{ product.material_full_name }}</small>
+  </div>
+</section>
+
+<section class="stat-band">
+  <article><span>Spool mass</span><b>{{ product.spool_weight_g|int }} g</b><small>Stored physical quantity</small></article>
+  <article><span>Current tracked price</span><b>{% if product.price_per_kg %}&euro;{{ '%.2f'|format(product.price_per_kg) }}/kg{% else %}-{% endif %}</b><small>{% if product.latest_price_eur %}&euro;{{ '%.2f'|format(product.latest_price_eur) }} last price{% else %}No price logged{% endif %}</small></article>
+  <article><span>Print results</span><b>{{ product.profile_count }}</b><small>Attached to this exact spool</small></article>
+  <article><span>Status</span><b>{% if product.is_active %}Active{% else %}Archived{% endif %}</b><small>{% if product.favorite %}Preferred buy-again spool{% else %}Not marked preferred{% endif %}</small></article>
+</section>
+
+<section class="detail-grid spool-detail-grid">
+  <article class="panel process-panel">
+    <div class="panel-title"><span class="eyebrow">SPOOL RECORD</span><h2>Identity</h2></div>
+    <dl class="info-list spool-info-list">
+      <div><dt>Material</dt><dd><a class="text-link" href="/materials/{{ product.material_slug }}">{{ product.material_name }}</a></dd></div>
+      <div><dt>Brand</dt><dd>{{ product.brand }}</dd></div>
+      <div><dt>Product</dt><dd>{{ product.product_name }}</dd></div>
+      <div><dt>Colour</dt><dd>{{ product.color_name or '-' }}</dd></div>
+      <div><dt>Supplier</dt><dd>{{ product.supplier or '-' }}</dd></div>
+      <div><dt>Spool number</dt><dd>{{ product.spool_code }}</dd></div>
+    </dl>
+    {% if product.notes %}<p class="product-note spool-notes">{{ product.notes }}</p>{% endif %}
+  </article>
+
+  <article class="panel properties-panel">
+    <div class="panel-title"><span class="eyebrow">PRICE MEMORY</span><h2>History</h2></div>
+    {% if product.is_active %}
+      <form action="/products/{{ product.id }}/prices" method="post" class="price-form spool-price-form">
+        <input type="hidden" name="return_to" value="{{ product.spool_path }}">
+        <label>Spool price (&euro;)<input type="number" name="price_eur" min="0" step="0.01" required></label>
+        <label>Date<input type="date" name="observed_on"></label>
+        <label>Source<input name="source_label" placeholder="Manual / sale / supplier"></label>
+        <label>Stock note<input name="stock_note" placeholder="e.g. 5 kg bulk sale"></label>
+        <button class="button small" type="submit">Save price</button>
+      </form>
+    {% endif %}
+    {% if product.price_entries %}
+      <div class="table-scroll">
+        <table>
+          <thead><tr><th>Date</th><th>Price</th><th>Source</th><th>Note</th></tr></thead>
+          <tbody>
+          {% for entry in product.price_entries %}
+            <tr>
+              <td>{{ entry.observed_on }}</td>
+              <td>&euro;{{ '%.2f'|format(entry.price_eur) }}</td>
+              <td>{{ entry.source_label }}</td>
+              <td>{{ entry.stock_note or '-' }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="empty-state">No price history saved for this spool.</div>
+    {% endif %}
+  </article>
+</section>
+
+<section class="section-heading anchored" id="profiles">
+  <div><span class="eyebrow">PRINT RESULTS</span><h2>Tests on {{ product.spool_code }}</h2></div>
+  <a class="button secondary" href="/materials/{{ product.material_slug }}#profiles">Add print result</a>
+</section>
+<section class="profile-list">
+{% for profile in profiles %}
+  <article class="profile-card">
+    <div class="profile-score">{{ profile.result_rating }}/5</div>
+    <div>
+      <h3>{{ profile.profile_name }}</h3>
+      <p>{{ profile.printer_name or 'No printer saved' }} &middot; {{ profile.state }} &middot; {{ profile.printed_on }}</p>
+      <div class="profile-specs">
+        <span>{{ profile.nozzle_diameter }} mm nozzle</span>
+        <span>{{ profile.nozzle_temp }} &deg;C nozzle</span>
+        <span>{{ profile.bed_temp }} &deg;C bed</span>
+        <span>{{ profile.chamber_temp }} &deg;C chamber</span>
+        <span>{{ profile.speed_mm_s }} mm/s</span>
+        {% if profile.filament_used_g %}<span>{{ '%.1f'|format(profile.filament_used_g) }} g used</span>{% endif %}
+      </div>
+      {% if profile.notes %}<p class="profile-note">{{ profile.notes }}</p>{% endif %}
+    </div>
+  </article>
+{% else %}
+  <div class="empty-state">No print result is attached to this exact spool yet.</div>
+{% endfor %}
+</section>
+{% endblock %}

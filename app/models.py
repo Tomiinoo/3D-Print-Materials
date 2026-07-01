@@ -104,6 +104,11 @@ class PrinterPreset(Base):
         cascade="all, delete-orphan",
         order_by="PrinterNozzle.installed.desc(), PrinterNozzle.id.desc()",
     )
+    tools: Mapped[list["PrinterTool"]] = relationship(
+        back_populates="printer",
+        cascade="all, delete-orphan",
+        order_by="PrinterTool.tool_order, PrinterTool.id",
+    )
     maintenance_entries: Mapped[list["PrinterMaintenance"]] = relationship(
         back_populates="printer",
         cascade="all, delete-orphan",
@@ -111,15 +116,68 @@ class PrinterPreset(Base):
     )
 
 
+class PrinterTool(Base):
+    __tablename__ = "printer_tools"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    printer_id: Mapped[int] = mapped_column(ForeignKey("printer_presets.id"), index=True)
+    name: Mapped[str] = mapped_column(String(140), default="Main print tool")
+    tool_order: Mapped[int] = mapped_column(Integer, default=1)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    max_hotend_c: Mapped[float] = mapped_column(Float, default=300)
+    nozzle_system: Mapped[str] = mapped_column(String(120), default="")
+    supported_feed_routes: Mapped[str] = mapped_column(String(220), default="")
+    notes: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    printer: Mapped["PrinterPreset"] = relationship(back_populates="tools")
+    nozzles: Mapped[list["PrinterNozzle"]] = relationship(back_populates="tool")
+
+
+class NozzleCatalogItem(Base):
+    __tablename__ = "nozzle_catalog_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    display_name: Mapped[str] = mapped_column(String(180))
+    manufacturer: Mapped[str] = mapped_column(String(120), default="")
+    model: Mapped[str] = mapped_column(String(140), default="")
+    diameter_mm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    nozzle_material: Mapped[str] = mapped_column(String(80), default="")
+    nozzle_system: Mapped[str] = mapped_column(String(120), default="")
+    max_temp_c: Mapped[float | None] = mapped_column(Float, nullable=True)
+    abrasive_ready: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    carbon_fibre_suitable: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    glass_fibre_suitable: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    high_flow: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    recommended_usage: Mapped[str] = mapped_column(Text, default="")
+    source_reference: Mapped[str] = mapped_column(Text, default="")
+    is_user_created: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    nozzle_instances: Mapped[list["PrinterNozzle"]] = relationship(back_populates="catalog_item")
+
+
 class PrinterNozzle(Base):
     __tablename__ = "printer_nozzles"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     printer_id: Mapped[int] = mapped_column(ForeignKey("printer_presets.id"), index=True)
+    tool_id: Mapped[int | None] = mapped_column(ForeignKey("printer_tools.id"), nullable=True, index=True)
+    catalog_item_id: Mapped[int | None] = mapped_column(ForeignKey("nozzle_catalog_items.id"), nullable=True, index=True)
     label: Mapped[str] = mapped_column(String(180))
     diameter_mm: Mapped[float] = mapped_column(Float, default=0.4)
     nozzle_material: Mapped[str] = mapped_column(String(60), default="brass")
     brand_product: Mapped[str] = mapped_column(String(180), default="")
+    manufacturer: Mapped[str] = mapped_column(String(120), default="")
+    part_number: Mapped[str] = mapped_column(String(140), default="")
+    nozzle_system: Mapped[str] = mapped_column(String(120), default="")
+    max_temp_c: Mapped[float | None] = mapped_column(Float, nullable=True)
+    abrasive_ready: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    carbon_fibre_suitable: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    glass_fibre_suitable: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    high_flow: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    inventory_status: Mapped[str] = mapped_column(String(40), default="spare")
     installed: Mapped[bool] = mapped_column(Boolean, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     installed_on: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -128,6 +186,8 @@ class PrinterNozzle(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     printer: Mapped["PrinterPreset"] = relationship(back_populates="nozzles")
+    tool: Mapped["PrinterTool | None"] = relationship(back_populates="nozzles")
+    catalog_item: Mapped["NozzleCatalogItem | None"] = relationship(back_populates="nozzle_instances")
     print_profiles: Mapped[list["PrintProfile"]] = relationship(back_populates="printer_nozzle")
 
 

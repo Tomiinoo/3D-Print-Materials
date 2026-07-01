@@ -26,6 +26,7 @@ from fastapi import HTTPException  # noqa: E402
 from app.database import Base  # noqa: E402
 from app.main import (  # noqa: E402
     app,
+    material_compatibility,
     nozzle_tracked_hours,
     product_select_options,
     profile_payload,
@@ -35,7 +36,7 @@ from app.main import (  # noqa: E402
     upload_root,
     validate_upload_filename,
 )
-from app.models import FilamentProduct, Material, PrinterMaintenance, PrinterNozzle, PrinterPreset, PrintProfile  # noqa: E402
+from app.models import FilamentProduct, Material, PrinterMaintenance, PrinterNozzle, PrinterPreset, PrinterTool, PrintProfile  # noqa: E402
 
 
 class PrinterReleaseTest(unittest.TestCase):
@@ -74,6 +75,88 @@ class PrinterReleaseTest(unittest.TestCase):
 
             self.assertFalse(first.installed)
             self.assertTrue(second.installed)
+
+    def test_each_tool_can_have_its_own_installed_nozzle(self) -> None:
+        with self.Session() as session:
+            printer = PrinterPreset(slug="printer", name="Printer")
+            first_tool = PrinterTool(printer=printer, name="Tool 1", tool_order=1, max_hotend_c=300)
+            second_tool = PrinterTool(printer=printer, name="Tool 2", tool_order=2, max_hotend_c=300)
+            first = PrinterNozzle(printer=printer, tool=first_tool, label="0.4 brass", diameter_mm=0.4, installed=True)
+            second = PrinterNozzle(printer=printer, tool=second_tool, label="0.6 steel", diameter_mm=0.6, installed=True)
+            session.add_all([printer, first_tool, second_tool, first, second])
+            session.flush()
+
+            update_nozzle_install_state(printer, first)
+            update_nozzle_install_state(printer, second)
+            session.commit()
+
+            self.assertTrue(first.installed)
+            self.assertTrue(second.installed)
+
+    def test_effective_temperature_uses_lower_tool_and_nozzle_limit(self) -> None:
+        with self.Session() as session:
+            material = Material(slug="pc", name="PC", full_name="PC", family="High-temp")
+            printer = PrinterPreset(slug="printer", name="Printer", nozzle_max_c=300, bed_max_c=120, enclosed=True)
+            tool = PrinterTool(printer=printer, name="Main print tool", tool_order=1, max_hotend_c=300)
+            nozzle = PrinterNozzle(
+                printer=printer,
+                tool=tool,
+                label="0.4 confirmed nozzle",
+                diameter_mm=0.4,
+                installed=True,
+                max_temp_c=280,
+                abrasive_ready=False,
+            )
+            session.add_all([material, printer, tool, nozzle])
+            session.commit()
+
+            result = material_compatibility(material, {"nozzle": "290-300 C", "bed": "100 C"}, [printer])
+            tool_result = result["printer_results"][0]["tool_results"][0]
+
+            self.assertEqual(tool_result["effective_max_c"], 280)
+            self.assertEqual(tool_result["status"], "not_recommended")
+            self.assertTrue(any("280" in reason for reason in tool_result["blockers"]))
+
+    def test_unknown_nozzle_temperature_needs_confirmation(self) -> None:
+        with self.Session() as session:
+            material = Material(slug="petg", name="PETG", full_name="PETG", family="Copolyester")
+            printer = PrinterPreset(slug="printer", name="Printer", nozzle_max_c=300, bed_max_c=100)
+            tool = PrinterTool(printer=printer, name="Main print tool", tool_order=1, max_hotend_c=300)
+            nozzle = PrinterNozzle(printer=printer, tool=tool, label="unknown nozzle", diameter_mm=0.4, installed=True)
+            session.add_all([material, printer, tool, nozzle])
+            session.commit()
+
+            result = material_compatibility(material, {"nozzle": "240-260 C", "bed": "80 C"}, [printer])
+            self.assertEqual(result["printer_results"][0]["status"], "needs_confirmation")
+
+    def test_abrasive_material_is_not_fully_approved_on_unsuitable_nozzle(self) -> None:
+        with self.Session() as session:
+            material = Material(slug="pla-cf", name="PLA-CF", full_name="PLA-CF", family="PLA", subfamily="Carbon fibre")
+            printer = PrinterPreset(slug="printer", name="Printer", nozzle_max_c=300, bed_max_c=100)
+            tool = PrinterTool(printer=printer, name="Main print tool", tool_order=1, max_hotend_c=300)
+            nozzle = PrinterNozzle(
+                printer=printer,
+                tool=tool,
+                label="0.4 brass",
+                diameter_mm=0.4,
+                nozzle_material="brass",
+                installed=True,
+                max_temp_c=300,
+                abrasive_ready=False,
+                carbon_fibre_suitable=False,
+            )
+            session.add_all([material, printer, tool, nozzle])
+            session.commit()
+
+            result = material_compatibility(
+                material,
+                {"nozzle": "210-240 C", "bed": "50 C", "recommended_nozzle": "0.6 mm hardened preferred"},
+                [printer],
+            )
+            tool_result = result["printer_results"][0]["tool_results"][0]
+
+            self.assertEqual(tool_result["status"], "not_recommended")
+            self.assertTrue(any("abrasive-ready" in reason for reason in tool_result["blockers"]))
 
     def test_nozzle_hours_follow_print_duration_edits_and_deletes(self) -> None:
         with self.Session() as session:

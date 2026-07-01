@@ -30,6 +30,25 @@
   const metric = (material, keys) => keys.reduce((sum, [key, weight]) => sum + value(material, key) * weight, 0);
   const materialKeys = (material) => new Set([...(material.filter_keys || []), ...(material.compatibility?.filter_keys || [])]);
   const hasKey = (material, key) => materialKeys(material).has(key);
+  const statusPenalty = (material) => {
+    const status = material.compatibility?.preferred_printer_result?.status;
+    if (status === 'recommended') return 0;
+    if (status === 'precautions') return 0.7;
+    if (status === 'needs_confirmation') return 1.4;
+    if (status === 'not_recommended') return 2.2;
+    return 0.8;
+  };
+  const easyPrintScore = (m) => {
+    const nozzle = Number(m.compatibility?.nozzle_max_c || 0);
+    const bed = Number(m.compatibility?.bed_max_c || 0);
+    const processPenalty = (nozzle > 280 ? 1.5 : nozzle > 260 ? 0.7 : 0)
+      + (bed > 100 ? 0.8 : 0)
+      + (m.compatibility?.requires_enclosure ? 1.4 : 0)
+      + (hasKey(m, 'hardened-nozzle') ? 1.0 : 0)
+      + (!m.compatibility?.ams ? 0.4 : 0)
+      + statusPenalty(m);
+    return metric(m, [['printability', 1.25], ['moisture_tolerance', 0.55], ['layer_adhesion', 0.18]]) - processPenalty;
+  };
 
   const filterValue = (key) => Number(document.querySelector(`[data-guide-filter="${key}"]`)?.value || 0);
   const filterActive = () => realFilters.some((input) => Number(input.value) > 0);
@@ -66,6 +85,7 @@
     impact: (m) => metric(m, [['impact_resistance',1.25],['layer_adhesion',.85],['strength_xy',.2]]),
     chemical: (m) => metric(m, [['chemical_resistance',1.1],['water_resistance',.9],['moisture_tolerance',.35]]),
     cheap: (m) => metric(m, [['printability',.8],['strength_xy',.3]]) + (11-value(m,'price_range'))*1.25,
+    easy: easyPrintScore,
   };
 
   const whyHigh = (m, needs) => {
@@ -76,12 +96,15 @@
     if (needs.has('outdoor')) notes.push(`UV ${value(m,'uv_resistance')}/10 and water ${value(m,'water_resistance')}/10`);
     if (needs.has('chemical')) notes.push(`chemical ${value(m,'chemical_resistance')}/10 and water ${value(m,'water_resistance')}/10`);
     if (needs.has('cheap')) notes.push(`lower price score ${value(m,'price_range')}/10, tracked price ${realLabel(m, 'price_per_kg', 'not saved')}`);
+    if (needs.has('easy')) notes.push(`printability ${value(m,'printability')}/10 and moisture tolerance ${value(m,'moisture_tolerance')}/10`);
     if (needs.has('flexible')) notes.push(hasKey(m, 'group-elastomer') ? 'elastomer family match' : `impact ${value(m,'impact_resistance')}/10`);
     if (!notes.length) notes.push(`printability ${value(m,'printability')}/10, tensile ${realLabel(m, 'tensile_mpa')}`);
     return notes.slice(0, 2).join(' · ');
   };
   const whyFail = (m) => {
     if (Number(m.properties?.moisture_sensitivity || 0) >= 8) return 'Moisture can change the result; dry and store carefully.';
+    if (m.compatibility?.preferred_printer_result?.status === 'needs_confirmation') return 'Nozzle or tool capability still needs confirmation on the selected printer.';
+    if (m.compatibility?.requires_enclosure) return 'Enclosure or chamber control may be needed for reliable printing.';
     if (value(m, 'impact_resistance') <= 3) return 'Likely stiff but not forgiving under impact.';
     if (value(m, 'heat_resistance') <= 3) return 'Heat resistance is limited for warm/load-bearing parts.';
     if (!m.compatibility?.ams) return 'AMS or multi-spool feeding may be risky.';

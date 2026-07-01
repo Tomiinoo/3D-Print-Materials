@@ -16,6 +16,7 @@
   const barTarget = document.getElementById('bar-chart');
   const scatterTarget = document.getElementById('scatter-chart');
   const tableBody = document.querySelector('#compare-table tbody');
+  const decisionTarget = document.getElementById('decision-summary');
   const barTitle = document.getElementById('bar-chart-title');
   const scatterTitle = document.getElementById('scatter-chart-title');
   const scatterNote = document.getElementById('scatter-chart-note');
@@ -358,12 +359,76 @@
     }).join('') || '<tr><td colspan="10" class="muted-cell">Select materials to populate the table.</td></tr>';
   };
 
+  const renderDecisionSummary = (selected) => {
+    if (!decisionTarget) return;
+    if (selected.length < 2) {
+      decisionTarget.innerHTML = '<div class="empty-state">Select at least two materials to build a decision summary.</div>';
+      return;
+    }
+
+    const scoreWinner = (key, label) => {
+      const ranked = selected
+        .map((material) => ({ material, value: score(material, key) }))
+        .filter((item) => Number.isFinite(item.value))
+        .sort((a, b) => b.value - a.value);
+      if (!ranked.length) return { label, text: 'No comparable value stored.' };
+      return { label, text: `${ranked[0].material.name} has the highest ${label.toLowerCase()} score in this selection (${scoreText(ranked[0].value)}).` };
+    };
+
+    const realWinner = (key, label, lowerIsBetter = false) => {
+      const ranked = selected
+        .map((material) => ({ material, value: metricValue(material, `real:${key}`), text: metricText(material, `real:${key}`) }))
+        .filter((item) => item.value !== null)
+        .sort((a, b) => lowerIsBetter ? a.value - b.value : b.value - a.value);
+      if (!ranked.length) return { label, text: 'No comparable value stored.' };
+      const verb = lowerIsBetter ? 'has the lowest stored' : 'is highest on stored';
+      return { label, text: `${ranked[0].material.name} ${verb} ${label.toLowerCase()} here (${ranked[0].text}).` };
+    };
+
+    const easyRanked = selected
+      .map((material) => {
+        const needsHardware = material.compatibility?.preferred_printer_result?.status === 'needs_confirmation' ? 1.2 : 0;
+        const enclosure = material.compatibility?.requires_enclosure ? 1.1 : 0;
+        const hardened = materialKeys(material).has('hardened-nozzle') ? 0.9 : 0;
+        return {
+          material,
+          value: score(material, 'printability') + score(material, 'moisture_tolerance') * 0.45 - needsHardware - enclosure - hardened,
+        };
+      })
+      .sort((a, b) => b.value - a.value);
+
+    const watchouts = selected.flatMap((material) => {
+      const notes = [];
+      const status = material.compatibility?.preferred_printer_result?.status;
+      if (status === 'needs_confirmation') notes.push(`${material.name}: nozzle or tool capability needs confirmation.`);
+      if (status === 'not_recommended') notes.push(`${material.name}: not recommended on the best saved-printer match.`);
+      if (material.compatibility?.requires_enclosure) notes.push(`${material.name}: enclosure or chamber control is part of the printability check.`);
+      if (materialKeys(material).has('hardened-nozzle')) notes.push(`${material.name}: abrasive-ready nozzle should be confirmed.`);
+      if (!material.compatibility?.ams) notes.push(`${material.name}: AMS / automatic feeder is not recommended.`);
+      if (Number(material.properties?.moisture_sensitivity || 0) >= 8) notes.push(`${material.name}: drying discipline is important.`);
+      return notes;
+    }).slice(0, 5);
+
+    const cards = [
+      scoreWinner('strength_xy', 'Strength'),
+      scoreWinner('impact_resistance', 'Impact'),
+      realWinner('hdt_c', 'Heat resistance'),
+      realWinner('modulus_gpa', 'Rigidity'),
+      realWinner('price_per_kg', 'Lower cost', true),
+      { label: 'Easiest to print', text: easyRanked.length ? `${easyRanked[0].material.name} looks most forgiving from printability, moisture tolerance, and hardware requirements.` : 'No comparable value stored.' },
+      { label: 'Watch-outs', text: watchouts.length ? watchouts.join(' ') : 'No major stored compatibility watch-outs for the current selection.' },
+    ];
+
+    decisionTarget.innerHTML = cards.map((card) => `<article class="decision-summary-card"><span>${esc(card.label)}</span><p>${esc(card.text)}</p></article>`).join('');
+  };
+
   const renderCharts = () => {
     const selected = selectedMaterials();
     renderRadar(selected);
     renderBars(selected);
     renderScatter(selected);
     renderTable(selected);
+    renderDecisionSummary(selected);
   };
 
   const renderAll = () => {

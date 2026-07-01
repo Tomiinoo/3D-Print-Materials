@@ -13,9 +13,20 @@
 <section class="filter-panel library-filter-panel">
   <label class="search-box"><span>Search</span><input id="material-search" type="search" placeholder="PETG, nylon, CF, heat, outdoor..."></label>
   <div class="filter-panel__hint">Search reads names, families, uses, process notes, and compatibility tags.</div>
+  <label class="state-select library-printer-filter">Show compatibility for
+    <select id="material-compat-filter">
+      <option value="all">All materials</option>
+      <option value="saved-printers">My saved printers</option>
+      {% for printer in printers %}
+        <option value="printer-{{ printer.slug }}">{{ printer.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <button class="button small secondary" type="button" id="material-filter-reset">Clear filters</button>
+  <div class="filter-panel__hint active-filter-summary" id="material-active-filter">Showing all materials.</div>
   <div class="family-filters family-filters--primary" id="family-filters">
     {% for filter in filters %}
-      {% if filter.key in ["all", "main-path", "aux-path", "ams-compatible", "group-elastomer", "group-polyamide", "group-high-temp", "group-filled", "group-support"] %}
+      {% if filter.key in ["all", "ams-compatible", "hardened-nozzle", "group-elastomer", "group-polyamide", "group-high-temp", "group-filled", "group-support"] %}
         <button class="chip {% if loop.first %}is-selected{% endif %}" data-material-filter="{{ filter.key }}">{{ filter.label }}</button>
       {% endif %}
     {% endfor %}
@@ -24,7 +35,7 @@
     <summary>More filters</summary>
     <div class="family-filters family-filters--advanced">
       {% for filter in filters %}
-        {% if filter.key not in ["all", "main-path", "aux-path", "ams-compatible", "group-elastomer", "group-polyamide", "group-high-temp", "group-filled", "group-support"] %}
+        {% if filter.key not in ["all", "ams-compatible", "hardened-nozzle", "group-elastomer", "group-polyamide", "group-high-temp", "group-filled", "group-support"] %}
           <button class="chip" data-material-filter="{{ filter.key }}">{{ filter.label }}</button>
         {% endif %}
       {% endfor %}
@@ -46,7 +57,7 @@
     <span>Action</span>
   </div>
 {% for material in materials %}
-  <a class="material-card material-row {% if material.is_catalog %}catalog-card{% endif %}" data-family="{{ material.family }}" data-filters="{{ (material.compatibility.filter_keys + material.filter_keys) | unique | join(' ') }}" data-search="{{ material.name }} {{ material.full_name }} {{ material.family }} {{ material.subfamily }} {{ material.best_for }} {{ material.avoid_for }} {{ material.description }} {{ material.search or '' }} {{ material.settings.recommended_nozzle }} {{ material.compatibility.filter_keys | join(' ') }} {{ material.filter_keys | join(' ') }}" href="/materials/{{ material.slug }}" style="--material-color: {{ material.family_color }}">
+  <a class="material-card material-row {% if material.is_catalog %}catalog-card{% endif %}" data-family="{{ material.family }}" data-filters="{{ (material.compatibility.filter_keys + material.filter_keys) | unique | join(' ') }}" data-printer-filters="{{ material.compatibility.compatible_filter_keys | join(' ') }}" data-search="{{ material.name }} {{ material.full_name }} {{ material.family }} {{ material.subfamily }} {{ material.best_for }} {{ material.avoid_for }} {{ material.description }} {{ material.search or '' }} {{ material.settings.recommended_nozzle }} {{ material.compatibility.summary_label }} {{ material.compatibility.filter_keys | join(' ') }} {{ material.filter_keys | join(' ') }}" href="/materials/{{ material.slug }}" style="--material-color: {{ material.family_color }}">
     <div class="material-row__name">
       <span class="material-dot"></span>
       <div>
@@ -60,7 +71,7 @@
     <span>{% if material.is_catalog %}{{ material.real_properties.hdt_c.label or '-' }}{% elif material.properties.hdt_c %}{{ material.properties.hdt_c }} &deg;C{% else %}-{% endif %}</span>
     <span>{% if material.is_catalog %}{{ material.real_properties.density_g_cm3.label or '-' }}{% else %}{{ '%.2f'|format(material.properties.density_g_cm3) }} g/cm3{% endif %}</span>
     <span>{{ material.properties.moisture_sensitivity or material.real_properties.moisture_sensitivity.label or '-' }}</span>
-    <span>{% if material.compatibility.direct_path %}Direct OK{% else %}Review path{% endif %}</span>
+    <span>{{ material.compatibility.summary_label }}</span>
     <span>{% if material.product_count %}{{ material.product_count }} active spool{% if material.product_count != 1 %}s{% endif %}{% else %}No active spool{% endif %}</span>
     <strong class="row-open">Open</strong>
   </a>

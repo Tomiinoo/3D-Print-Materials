@@ -24,14 +24,16 @@ from .catalog import catalog_entries, catalog_entry_by_slug
 from .models import (
     FilamentProduct,
     Material,
+    NozzleCatalogItem,
     PriceEntry,
     PrintAttachment,
     PrinterMaintenance,
     PrinterNozzle,
     PrinterPreset,
+    PrinterTool,
     PrintProfile,
 )
-from .seed import seed_materials, seed_printer_presets
+from .seed import ensure_printer_tools, seed_materials, seed_nozzle_catalog, seed_printer_presets
 from .v2_routes import router as v2_router
 
 APP_DIR = Path(__file__).resolve().parent
@@ -47,6 +49,21 @@ NOZZLE_MATERIAL_OPTIONS = [
     "ruby / abrasive-resistant",
     "other",
 ]
+NOZZLE_INVENTORY_STATUS_OPTIONS = ["installed", "spare", "removed", "worn", "archived"]
+COMPATIBILITY_STATUS_LABELS = {
+    "recommended": "Recommended",
+    "precautions": "Compatible with precautions",
+    "needs_confirmation": "Needs hardware confirmation",
+    "not_recommended": "Not recommended",
+    "not_supported": "Not supported",
+}
+COMPATIBILITY_STATUS_RANK = {
+    "recommended": 5,
+    "precautions": 4,
+    "needs_confirmation": 3,
+    "not_recommended": 2,
+    "not_supported": 1,
+}
 MAINTENANCE_TYPE_OPTIONS = [
     "part replaced",
     "service",
@@ -62,7 +79,9 @@ async def lifespan(_: FastAPI):
     Base.metadata.create_all(bind=engine)
     with SessionLocal() as session:
         seed_materials(session)
+        seed_nozzle_catalog(session)
         seed_printer_presets(session)
+        ensure_printer_tools(session)
     yield
 
 
@@ -90,10 +109,8 @@ SCORE_LABELS = {
 
 MATERIAL_LIBRARY_FILTERS = [
     {"key": "all", "label": "All materials"},
-    {"key": "main-path", "label": "Direct path"},
-    {"key": "aux-path", "label": "Aux path"},
-    {"key": "ams-compatible", "label": "AMS compatible"},
-    {"key": "hardened-nozzle", "label": "Hardened nozzle"},
+    {"key": "ams-compatible", "label": "Works with AMS / automatic feeder"},
+    {"key": "hardened-nozzle", "label": "Needs hardened nozzle"},
     {"key": "catalog-backlog", "label": "Catalog backlog"},
     {"key": "group-pla", "label": "PLA"},
     {"key": "group-polyester", "label": "PET / copolyester"},
@@ -270,6 +287,9 @@ def active_printers(session: Session) -> list[PrinterPreset]:
             select(PrinterPreset)
             .options(
                 selectinload(PrinterPreset.nozzles).selectinload(PrinterNozzle.print_profiles),
+                selectinload(PrinterPreset.nozzles).selectinload(PrinterNozzle.catalog_item),
+                selectinload(PrinterPreset.nozzles).selectinload(PrinterNozzle.tool),
+                selectinload(PrinterPreset.tools).selectinload(PrinterTool.nozzles),
                 selectinload(PrinterPreset.print_profiles),
                 selectinload(PrinterPreset.maintenance_entries),
             )
@@ -285,6 +305,9 @@ def all_printers(session: Session) -> list[PrinterPreset]:
             select(PrinterPreset)
             .options(
                 selectinload(PrinterPreset.nozzles).selectinload(PrinterNozzle.print_profiles),
+                selectinload(PrinterPreset.nozzles).selectinload(PrinterNozzle.catalog_item),
+                selectinload(PrinterPreset.nozzles).selectinload(PrinterNozzle.tool),
+                selectinload(PrinterPreset.tools).selectinload(PrinterTool.nozzles),
                 selectinload(PrinterPreset.print_profiles),
                 selectinload(PrinterPreset.maintenance_entries),
             )
@@ -315,19 +338,54 @@ def printer_tracked_hours(printer: PrinterPreset) -> float:
     )
 
 
-def installed_nozzle(printer: PrinterPreset) -> PrinterNozzle | None:
-    return next((nozzle for nozzle in printer.nozzles if nozzle.installed and nozzle.is_active), None)
+def active_printer_tools(printer: PrinterPreset) -> list[PrinterTool]:
+    return sorted(
+        [tool for tool in printer.tools if tool.is_active],
+        key=lambda item: (item.tool_order, item.id),
+    )
+
+
+def installed_nozzle(printer: PrinterPreset, tool: PrinterTool | None = None) -> PrinterNozzle | None:
+    candidates = [nozzle for nozzle in printer.nozzles if nozzle.installed and nozzle.is_active]
+    if tool is not None:
+        candidates = [nozzle for nozzle in candidates if nozzle.tool_id == tool.id]
+    return next(iter(candidates), None)
+
+
+def nullable_bool_label(value: bool | None, true_label: str = "Yes", false_label: str = "No") -> str:
+    if value is None:
+        return "Unknown"
+    return true_label if value else false_label
 
 
 def nozzle_payload(nozzle: PrinterNozzle) -> dict[str, Any]:
     tracked_hours = nozzle_tracked_hours(nozzle)
+    catalog = nozzle.catalog_item
+    max_temp = nozzle.max_temp_c if nozzle.max_temp_c is not None else (catalog.max_temp_c if catalog else None)
+    abrasive_ready = nozzle.abrasive_ready
+    if abrasive_ready is None and catalog:
+        abrasive_ready = catalog.abrasive_ready
     return {
         "id": nozzle.id,
         "printer_id": nozzle.printer_id,
+        "tool_id": nozzle.tool_id,
+        "tool_name": nozzle.tool.name if nozzle.tool else "",
+        "catalog_item_id": nozzle.catalog_item_id,
         "label": nozzle.label,
         "diameter_mm": nozzle.diameter_mm,
         "nozzle_material": nozzle.nozzle_material,
         "brand_product": nozzle.brand_product,
+        "manufacturer": nozzle.manufacturer,
+        "part_number": nozzle.part_number,
+        "nozzle_system": nozzle.nozzle_system,
+        "max_temp_c": max_temp,
+        "max_temp_label": f"{max_temp:g} °C" if max_temp is not None else "Unknown",
+        "abrasive_ready": abrasive_ready,
+        "abrasive_ready_label": nullable_bool_label(abrasive_ready, "Abrasive-ready", "Not abrasive-ready"),
+        "carbon_fibre_suitable": nozzle.carbon_fibre_suitable if nozzle.carbon_fibre_suitable is not None else (catalog.carbon_fibre_suitable if catalog else None),
+        "glass_fibre_suitable": nozzle.glass_fibre_suitable if nozzle.glass_fibre_suitable is not None else (catalog.glass_fibre_suitable if catalog else None),
+        "high_flow": nozzle.high_flow if nozzle.high_flow is not None else (catalog.high_flow if catalog else None),
+        "inventory_status": nozzle.inventory_status or ("installed" if nozzle.installed else ("spare" if nozzle.is_active else "archived")),
         "installed": nozzle.installed,
         "is_active": nozzle.is_active,
         "installed_on": nozzle.installed_on.isoformat() if nozzle.installed_on else "",
@@ -335,7 +393,25 @@ def nozzle_payload(nozzle: PrinterNozzle) -> dict[str, Any]:
         "tracked_hours": tracked_hours,
         "tracked_hours_label": format_hours(tracked_hours),
         "print_count": len(nozzle.print_profiles),
+        "catalog_name": catalog.display_name if catalog else "",
         "notes": public_text(nozzle.notes),
+    }
+
+
+def tool_payload(tool: PrinterTool) -> dict[str, Any]:
+    installed = next((nozzle for nozzle in tool.nozzles if nozzle.installed and nozzle.is_active), None)
+    return {
+        "id": tool.id,
+        "printer_id": tool.printer_id,
+        "name": tool.name,
+        "tool_order": tool.tool_order,
+        "is_active": tool.is_active,
+        "max_hotend_c": tool.max_hotend_c,
+        "nozzle_system": tool.nozzle_system,
+        "supported_feed_routes": tool.supported_feed_routes,
+        "notes": public_text(tool.notes),
+        "installed_nozzle": nozzle_payload(installed) if installed else None,
+        "nozzle_count": len([nozzle for nozzle in tool.nozzles if nozzle.is_active]),
     }
 
 
@@ -356,6 +432,7 @@ def printer_payload(printer: PrinterPreset) -> dict[str, Any]:
     installed = installed_nozzle(printer)
     tracked_hours = printer_tracked_hours(printer)
     last_maintenance = next(iter(printer.maintenance_entries), None)
+    tools = active_printer_tools(printer)
     return {
         "id": printer.id,
         "slug": printer.slug,
@@ -378,6 +455,8 @@ def printer_payload(printer: PrinterPreset) -> dict[str, Any]:
         "tracked_hours_label": format_hours(tracked_hours),
         "print_count": len(printer.print_profiles),
         "nozzle_count": len([nozzle for nozzle in printer.nozzles if nozzle.is_active]),
+        "tool_count": len(tools),
+        "tools": [tool_payload(tool) for tool in tools],
         "installed_nozzle": nozzle_payload(installed) if installed else None,
         "last_maintenance_date": last_maintenance.maintenance_date.isoformat() if last_maintenance else "",
         "nozzles": [nozzle_payload(nozzle) for nozzle in printer.nozzles],
@@ -427,59 +506,322 @@ def truthy_setting(value: Any, default: bool = False) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
+def setting_text(settings: dict[str, Any], key: str) -> str:
+    return clean_text(str(settings.get(key) or ""))
+
+
+def material_identity_text(material: Material, settings: dict[str, Any]) -> str:
+    return " ".join(
+        clean_text(str(part)).lower()
+        for part in (
+            material.name,
+            material.full_name,
+            material.family,
+            material.subfamily,
+            settings.get("recommended_nozzle"),
+        )
+    )
+
+
+def material_requires_abrasive(material: Material, settings: dict[str, Any]) -> bool:
+    text = material_identity_text(material, settings)
+    tokens = text_tokens(text)
+    return token_has(tokens, "cf", "gf", "carbon", "glass", "fiber", "fibre", "abrasive", "filled") or text_has(
+        text,
+        "hardened",
+        "tungsten",
+        "ruby",
+        "tc",
+        "abrasive",
+    )
+
+
+def material_reinforcement_kind(material: Material) -> str:
+    text = f"{material.name} {material.full_name} {material.subfamily}".lower()
+    tokens = text_tokens(text)
+    if token_has(tokens, "cf", "carbon") or text_has(text, "carbon fibre", "carbon fiber"):
+        return "carbon"
+    if token_has(tokens, "gf", "glass") or text_has(text, "glass fibre", "glass fiber"):
+        return "glass"
+    return ""
+
+
+def material_is_flexible(material: Material) -> bool:
+    family = clean_text(material.family).lower()
+    subfamily = clean_text(material.subfamily).lower()
+    name = clean_text(material.name).lower()
+    return "elastomer" in family or "flex" in subfamily or "tpu" in name or "tpe" in name
+
+
+def material_is_support(material: Material) -> bool:
+    family = clean_text(material.family).lower()
+    subfamily = clean_text(material.subfamily).lower()
+    name = clean_text(material.name).lower()
+    return "support" in family or "support" in subfamily or name in {"pva", "bvoh"}
+
+
+def material_requires_enclosure(settings: dict[str, Any]) -> bool:
+    chamber_max = parsed_max_number(settings.get("chamber"))
+    chamber_text = setting_text(settings, "chamber").lower()
+    if chamber_max is not None and chamber_max > 40:
+        return True
+    return text_has(chamber_text, "enclosure", "chamber", "heated") and not text_has(
+        chamber_text,
+        "not needed",
+        "ambient",
+        "cool",
+    )
+
+
+def nozzle_bool(nozzle: PrinterNozzle | None, key: str) -> bool | None:
+    if nozzle is None:
+        return None
+    direct = getattr(nozzle, key)
+    if direct is not None:
+        return direct
+    if nozzle.catalog_item is not None:
+        return getattr(nozzle.catalog_item, key)
+    material = clean_text(nozzle.nozzle_material).lower()
+    label = f"{nozzle.label} {nozzle.brand_product} {nozzle.manufacturer}".lower()
+    if key in {"abrasive_ready", "carbon_fibre_suitable", "glass_fibre_suitable"}:
+        if text_has(material, "hardened", "ruby", "tungsten", "carbide") or text_has(label, "hardened", "ruby", "tungsten", "carbide", "abrasive"):
+            return True
+        if text_has(material, "brass", "stainless"):
+            return False
+    return None
+
+
+def nozzle_temp_limit(nozzle: PrinterNozzle | None) -> float | None:
+    if nozzle is None:
+        return None
+    if nozzle.max_temp_c is not None:
+        return nozzle.max_temp_c
+    if nozzle.catalog_item and nozzle.catalog_item.max_temp_c is not None:
+        return nozzle.catalog_item.max_temp_c
+    return None
+
+
+def installed_nozzle_for_tool(printer: PrinterPreset, tool: PrinterTool | None) -> PrinterNozzle | None:
+    return installed_nozzle(printer, tool) if tool is not None else installed_nozzle(printer)
+
+
+def fallback_tool_payload(printer: PrinterPreset) -> dict[str, Any]:
+    return {
+        "id": None,
+        "name": "Installed nozzle compatibility",
+        "tool_order": 1,
+        "max_hotend_c": printer.nozzle_max_c,
+        "nozzle_system": "",
+        "supported_feed_routes": "standard filament path",
+        "notes": "",
+    }
+
+
+def evaluate_material_on_tool(
+    material: Material,
+    settings: dict[str, Any],
+    printer: PrinterPreset,
+    tool: PrinterTool | None,
+) -> dict[str, Any]:
+    nozzle = installed_nozzle_for_tool(printer, tool)
+    tool_limit = (tool.max_hotend_c if tool is not None else printer.nozzle_max_c) or printer.nozzle_max_c
+    nozzle_limit = nozzle_temp_limit(nozzle)
+    effective_limit = min(tool_limit, nozzle_limit) if tool_limit and nozzle_limit is not None else tool_limit
+    effective_confirmed = nozzle is not None and nozzle_limit is not None
+    required_nozzle = parsed_max_number(settings.get("nozzle"))
+    required_bed = parsed_max_number(settings.get("bed"))
+    required_chamber = parsed_max_number(settings.get("chamber"))
+    requires_enclosure = material_requires_enclosure(settings)
+    requires_abrasive = material_requires_abrasive(material, settings)
+    reinforcement = material_reinforcement_kind(material)
+    flexible = material_is_flexible(material)
+    moisture = parsed_number(public_text(parse_json(material.properties_json)).get("moisture_sensitivity"))
+    ams_ok = truthy_setting(settings.get("ams_compatible"), truthy_setting(settings.get("aux_compatible"), False) and not flexible and not material_is_support(material))
+
+    blockers: list[str] = []
+    confirmations: list[str] = []
+    cautions: list[str] = []
+    strengths: list[str] = []
+
+    tool_name = tool.name if tool is not None else "Installed nozzle compatibility"
+    nozzle_label = nozzle.label if nozzle else "No installed nozzle"
+
+    if nozzle is None:
+        confirmations.append("No installed nozzle is assigned to this tool.")
+    elif not effective_confirmed:
+        confirmations.append("Installed nozzle maximum safe temperature is unknown.")
+
+    if required_nozzle is not None:
+        if effective_confirmed and effective_limit is not None and required_nozzle > effective_limit:
+            blockers.append(f"Effective nozzle temperature limit is {effective_limit:g} C, below the material guide of {required_nozzle:g} C.")
+        elif effective_confirmed:
+            strengths.append("Effective nozzle temperature is sufficient.")
+        else:
+            confirmations.append("Nozzle temperature compatibility cannot be fully verified.")
+
+    if required_bed is not None and printer.bed_max_c and required_bed > printer.bed_max_c:
+        blockers.append(f"Bed temperature limit is {printer.bed_max_c:g} C, below the material guide of {required_bed:g} C.")
+    elif required_bed is not None:
+        strengths.append("Bed temperature is sufficient.")
+
+    if requires_enclosure and not printer.enclosed:
+        blockers.append("Enclosure is required or strongly recommended, but this printer is open-frame.")
+    elif requires_enclosure:
+        strengths.append("Enclosure is available.")
+
+    if required_chamber is not None and required_chamber > 45:
+        if printer.chamber_max_c and required_chamber > printer.chamber_max_c:
+            blockers.append(f"Chamber capability is {printer.chamber_max_c:g} C, below the material guide of {required_chamber:g} C.")
+        elif not printer.heated_chamber and required_chamber > 50:
+            cautions.append("A warm chamber is recommended; confirm the real chamber temperature.")
+        elif printer.heated_chamber:
+            strengths.append("Heated chamber capability is available.")
+
+    if flexible and not printer.supports_flexible:
+        blockers.append("Flexible material support is not confirmed for this printer.")
+
+    if requires_abrasive:
+        abrasive_ready = nozzle_bool(nozzle, "abrasive_ready")
+        if abrasive_ready is True:
+            strengths.append("Abrasive-ready nozzle is installed.")
+        elif abrasive_ready is False:
+            blockers.append("Material needs an abrasive-ready or hardened nozzle.")
+        else:
+            confirmations.append("Abrasive-nozzle suitability is unknown.")
+
+    if reinforcement == "carbon":
+        carbon_ok = nozzle_bool(nozzle, "carbon_fibre_suitable")
+        if carbon_ok is False:
+            blockers.append("Installed nozzle is not marked suitable for carbon-fibre materials.")
+        elif carbon_ok is None:
+            confirmations.append("Carbon-fibre nozzle suitability is unknown.")
+    elif reinforcement == "glass":
+        glass_ok = nozzle_bool(nozzle, "glass_fibre_suitable")
+        if glass_ok is False:
+            blockers.append("Installed nozzle is not marked suitable for glass-fibre materials.")
+        elif glass_ok is None:
+            confirmations.append("Glass-fibre nozzle suitability is unknown.")
+
+    if printer.ams_capable and not ams_ok:
+        cautions.append("AMS / automatic feeder is not recommended for this material.")
+    if moisture is not None and moisture >= 6:
+        cautions.append("Filament should be dried and kept dry before printing.")
+    if nozzle and nozzle.diameter_mm < 0.6 and requires_abrasive and text_has(setting_text(settings, "recommended_nozzle").lower(), "0.6", "preferred"):
+        cautions.append("A larger nozzle diameter is recommended for this filled material.")
+
+    if blockers:
+        status = "not_recommended"
+    elif confirmations:
+        status = "needs_confirmation"
+    elif cautions:
+        status = "precautions"
+    else:
+        status = "recommended"
+
+    return {
+        "tool_id": tool.id if tool is not None else None,
+        "tool_name": tool_name,
+        "nozzle_id": nozzle.id if nozzle else None,
+        "nozzle_label": nozzle_label,
+        "status": status,
+        "status_label": COMPATIBILITY_STATUS_LABELS[status],
+        "effective_max_c": effective_limit,
+        "effective_max_confirmed": effective_confirmed,
+        "required_nozzle_c": required_nozzle,
+        "blockers": blockers,
+        "confirmations": confirmations,
+        "cautions": cautions,
+        "strengths": strengths,
+        "reasons": strengths + confirmations + cautions + blockers,
+    }
+
+
+def printer_compatibility_summary(printer: PrinterPreset, tool_results: list[dict[str, Any]]) -> dict[str, Any]:
+    if not tool_results:
+        status = "needs_confirmation"
+        best_result = {
+            "status": status,
+            "status_label": COMPATIBILITY_STATUS_LABELS[status],
+            "reasons": ["No active print tool is configured for this printer."],
+        }
+    else:
+        best_result = max(tool_results, key=lambda item: COMPATIBILITY_STATUS_RANK.get(item["status"], 0))
+        status = best_result["status"]
+
+    if status == "recommended":
+        summary = f"Compatible with {printer.name}"
+    elif status == "precautions":
+        summary = f"Compatible with {printer.name} with limitations"
+    elif status == "needs_confirmation":
+        summary = f"Needs nozzle confirmation on {printer.name}"
+    elif status == "not_supported":
+        summary = f"Not supported by {printer.name}"
+    else:
+        summary = f"Not recommended for {printer.name}"
+
+    return {
+        "printer_id": printer.id,
+        "printer_slug": printer.slug,
+        "printer_name": printer.name,
+        "status": status,
+        "status_label": COMPATIBILITY_STATUS_LABELS[status],
+        "summary": summary,
+        "filter_key": f"printer-{printer.slug}",
+        "is_compatible_filter_match": status in {"recommended", "precautions"},
+        "best_result": best_result,
+        "tool_results": tool_results,
+    }
+
+
 def material_compatibility(
     material: Material,
     settings: dict[str, Any],
     printers: list[PrinterPreset] | None = None,
 ) -> dict[str, Any]:
-    family = clean_text(material.family).lower()
-    subfamily = clean_text(material.subfamily).lower()
-    name = clean_text(material.name).lower()
     nozzle_max = parsed_max_number(settings.get("nozzle"))
     bed_max = parsed_max_number(settings.get("bed"))
     chamber_max = parsed_max_number(settings.get("chamber"))
     direct_ok = truthy_setting(settings.get("main_compatible"), True)
     aux_ok = truthy_setting(settings.get("aux_compatible"), False)
-    flexible = "elastomer" in family or "flex" in subfamily or "tpu" in name or "tpe" in name
-    support = "support" in family or "support" in subfamily or name in {"pva", "bvoh"}
+    flexible = material_is_flexible(material)
+    support = material_is_support(material)
     ams_ok = truthy_setting(settings.get("ams_compatible"), aux_ok and not flexible and not support)
-    requires_enclosure = chamber_max is not None and chamber_max > 40
+    requires_enclosure = material_requires_enclosure(settings)
 
-    filter_keys = ["main-path"] if direct_ok else []
-    if aux_ok:
-        filter_keys.append("aux-path")
+    filter_keys: list[str] = []
     if ams_ok:
         filter_keys.append("ams-compatible")
-    if text_has(clean_text(settings.get("recommended_nozzle")).lower(), "hardened", "tc", "steel"):
+    if material_requires_abrasive(material, settings):
         filter_keys.append("hardened-nozzle")
 
-    printer_matches: list[str] = []
-    printer_match_labels: list[str] = []
+    printer_results: list[dict[str, Any]] = []
+    compatible_filter_keys: list[str] = []
     for printer in printers or []:
-        if nozzle_max is not None and printer.nozzle_max_c and nozzle_max > printer.nozzle_max_c:
-            continue
-        if bed_max is not None and printer.bed_max_c and bed_max > printer.bed_max_c:
-            continue
-        if chamber_max is not None and printer.chamber_max_c and chamber_max > printer.chamber_max_c:
-            continue
-        if requires_enclosure and not printer.enclosed:
-            continue
-        if flexible and not printer.supports_flexible:
-            continue
+        tools = active_printer_tools(printer)
+        tool_results = [
+            evaluate_material_on_tool(material, settings, printer, tool)
+            for tool in tools
+        ] if tools else [evaluate_material_on_tool(material, settings, printer, None)]
+        summary = printer_compatibility_summary(printer, tool_results)
+        printer_results.append(summary)
+        if summary["is_compatible_filter_match"]:
+            compatible_filter_keys.append(summary["filter_key"])
+            filter_keys.append(summary["filter_key"])
 
-        key = f"printer-{printer.slug}"
-        printer_matches.append(key)
-        printer_match_labels.append(printer.name)
-        filter_keys.append(key)
+    preferred = max(printer_results, key=lambda item: COMPATIBILITY_STATUS_RANK.get(item["status"], 0)) if printer_results else None
 
     return {
         "direct_path": direct_ok,
         "aux_path": aux_ok,
         "ams": ams_ok,
         "requires_enclosure": requires_enclosure,
-        "printer_matches": printer_matches,
-        "printer_match_labels": printer_match_labels,
-        "filter_keys": filter_keys,
+        "printer_matches": compatible_filter_keys,
+        "printer_match_labels": [item["printer_name"] for item in printer_results if item["is_compatible_filter_match"]],
+        "printer_results": printer_results,
+        "preferred_printer_result": preferred,
+        "summary_label": preferred["summary"] if preferred else "No saved printer selected",
+        "compatible_filter_keys": compatible_filter_keys,
+        "filter_keys": sorted(set(filter_keys)),
         "nozzle_max_c": nozzle_max,
         "bed_max_c": bed_max,
         "chamber_max_c": chamber_max,
@@ -1315,6 +1657,9 @@ def dashboard(request: Request, session: Session = Depends(get_session)):
 def printer_detail_options():
     return (
         selectinload(PrinterPreset.nozzles).selectinload(PrinterNozzle.print_profiles),
+        selectinload(PrinterPreset.nozzles).selectinload(PrinterNozzle.catalog_item),
+        selectinload(PrinterPreset.nozzles).selectinload(PrinterNozzle.tool),
+        selectinload(PrinterPreset.tools).selectinload(PrinterTool.nozzles),
         selectinload(PrinterPreset.maintenance_entries),
         selectinload(PrinterPreset.print_profiles).selectinload(PrintProfile.material),
         selectinload(PrinterPreset.print_profiles).selectinload(PrintProfile.product),
@@ -1375,6 +1720,18 @@ def blank_printer_payload() -> dict[str, Any]:
         "hours_before_tracking": 0,
         "notes": "",
         "is_active": True,
+        "tools": [
+            {
+                "id": None,
+                "name": "Main print tool",
+                "tool_order": 1,
+                "is_active": True,
+                "max_hotend_c": 300,
+                "nozzle_system": "",
+                "supported_feed_routes": "standard filament path",
+                "notes": "",
+            }
+        ],
     }
 
 
@@ -1382,10 +1739,21 @@ def blank_nozzle_payload(printer_id: int) -> dict[str, Any]:
     return {
         "id": None,
         "printer_id": printer_id,
+        "tool_id": None,
+        "catalog_item_id": None,
         "label": "",
         "diameter_mm": 0.4,
         "nozzle_material": "brass",
         "brand_product": "",
+        "manufacturer": "",
+        "part_number": "",
+        "nozzle_system": "",
+        "max_temp_c": "",
+        "abrasive_ready": None,
+        "carbon_fibre_suitable": None,
+        "glass_fibre_suitable": None,
+        "high_flow": None,
+        "inventory_status": "spare",
         "installed": False,
         "is_active": True,
         "installed_on": "",
@@ -1419,13 +1787,309 @@ def unique_printer_slug(session: Session, name: str, current_printer_id: int | N
         counter += 1
 
 
+def normalize_form_list(values: list[str] | None) -> list[str]:
+    return list(values or [])
+
+
+def sync_printer_tools(
+    printer: PrinterPreset,
+    tool_ids: list[str] | None,
+    tool_names: list[str] | None,
+    tool_max_hotend_c: list[str] | None,
+    tool_nozzle_systems: list[str] | None,
+    tool_feed_routes: list[str] | None,
+    tool_notes: list[str] | None,
+    tool_is_active: list[str] | None,
+) -> None:
+    ids = normalize_form_list(tool_ids)
+    names = normalize_form_list(tool_names)
+    max_values = normalize_form_list(tool_max_hotend_c)
+    systems = normalize_form_list(tool_nozzle_systems)
+    routes = normalize_form_list(tool_feed_routes)
+    notes = normalize_form_list(tool_notes)
+    active_values = normalize_form_list(tool_is_active)
+    existing = {tool.id: tool for tool in printer.tools}
+    submitted_ids: set[int] = set()
+
+    for index, name in enumerate(names):
+        label = clean_text(name) or f"Tool {index + 1}"
+        raw_id = ids[index] if index < len(ids) else ""
+        tool = None
+        if raw_id:
+            try:
+                tool_id = int(raw_id)
+            except ValueError:
+                tool_id = 0
+            tool = existing.get(tool_id)
+            if tool:
+                submitted_ids.add(tool.id)
+        if tool is None:
+            tool = PrinterTool()
+            printer.tools.append(tool)
+
+        max_hotend = parse_optional_float(max_values[index] if index < len(max_values) else "")
+        tool.name = label
+        tool.tool_order = index + 1
+        tool.max_hotend_c = max(0, max_hotend if max_hotend is not None else (printer.nozzle_max_c or 0))
+        tool.nozzle_system = clean_text(systems[index] if index < len(systems) else "")
+        tool.supported_feed_routes = clean_text(routes[index] if index < len(routes) else "")
+        tool.notes = clean_text(notes[index] if index < len(notes) else "")
+        tool.is_active = (active_values[index] if index < len(active_values) else "active") == "active"
+
+    if not names:
+        printer.tools.append(
+            PrinterTool(
+                printer=printer,
+                name="Main print tool",
+                tool_order=1,
+                max_hotend_c=printer.nozzle_max_c or 300,
+                supported_feed_routes="standard filament path",
+            )
+        )
+
+    for tool in printer.tools:
+        if tool.id and tool.id not in submitted_ids and names:
+            tool.is_active = False
+
+
 def update_nozzle_install_state(printer: PrinterPreset, installed_nozzle: PrinterNozzle | None) -> None:
     if installed_nozzle and installed_nozzle.is_active and installed_nozzle.installed:
+        installed_nozzle.inventory_status = "installed"
         for nozzle in printer.nozzles:
-            if nozzle.id != installed_nozzle.id:
+            same_scope = (
+                nozzle.tool_id == installed_nozzle.tool_id
+                if installed_nozzle.tool_id is not None
+                else nozzle.tool_id is None
+            )
+            if nozzle.id != installed_nozzle.id and same_scope:
                 nozzle.installed = False
+                if nozzle.inventory_status == "installed":
+                    nozzle.inventory_status = "spare"
     elif installed_nozzle and not installed_nozzle.is_active:
         installed_nozzle.installed = False
+        if installed_nozzle.inventory_status == "installed":
+            installed_nozzle.inventory_status = "spare"
+
+
+def tri_state_bool(value: str | None) -> bool | None:
+    normalized = clean_text(value).lower()
+    if normalized in {"yes", "true", "1", "on"}:
+        return True
+    if normalized in {"no", "false", "0", "off"}:
+        return False
+    return None
+
+
+def nozzle_catalog_items(session: Session) -> list[NozzleCatalogItem]:
+    return list(
+        session.scalars(
+            select(NozzleCatalogItem)
+            .where(NozzleCatalogItem.is_active.is_(True))
+            .order_by(NozzleCatalogItem.is_user_created, NozzleCatalogItem.manufacturer, NozzleCatalogItem.display_name)
+        )
+    )
+
+
+def nozzle_catalog_payload(item: NozzleCatalogItem) -> dict[str, Any]:
+    return {
+        "id": item.id,
+        "display_name": item.display_name,
+        "manufacturer": item.manufacturer,
+        "model": item.model,
+        "diameter_mm": item.diameter_mm,
+        "nozzle_material": item.nozzle_material,
+        "nozzle_system": item.nozzle_system,
+        "max_temp_c": item.max_temp_c,
+        "abrasive_ready": item.abrasive_ready,
+        "carbon_fibre_suitable": item.carbon_fibre_suitable,
+        "glass_fibre_suitable": item.glass_fibre_suitable,
+        "high_flow": item.high_flow,
+        "recommended_usage": item.recommended_usage,
+        "source_reference": item.source_reference,
+        "is_user_created": item.is_user_created,
+    }
+
+
+def apply_catalog_defaults(nozzle: PrinterNozzle, catalog: NozzleCatalogItem | None) -> None:
+    if catalog is None:
+        return
+    nozzle.catalog_item = catalog
+    if not nozzle.label:
+        nozzle.label = catalog.display_name
+    if not nozzle.manufacturer:
+        nozzle.manufacturer = catalog.manufacturer
+    if not nozzle.part_number:
+        nozzle.part_number = catalog.model
+    if not nozzle.nozzle_material:
+        nozzle.nozzle_material = catalog.nozzle_material
+    if not nozzle.nozzle_system:
+        nozzle.nozzle_system = catalog.nozzle_system
+    if not nozzle.diameter_mm and catalog.diameter_mm:
+        nozzle.diameter_mm = catalog.diameter_mm
+    if nozzle.max_temp_c is None:
+        nozzle.max_temp_c = catalog.max_temp_c
+    if nozzle.abrasive_ready is None:
+        nozzle.abrasive_ready = catalog.abrasive_ready
+    if nozzle.carbon_fibre_suitable is None:
+        nozzle.carbon_fibre_suitable = catalog.carbon_fibre_suitable
+    if nozzle.glass_fibre_suitable is None:
+        nozzle.glass_fibre_suitable = catalog.glass_fibre_suitable
+    if nozzle.high_flow is None:
+        nozzle.high_flow = catalog.high_flow
+
+
+def resolve_printer_tool(printer: PrinterPreset, tool_id: str | int | None) -> PrinterTool | None:
+    tools = active_printer_tools(printer)
+    if not tools:
+        tool = PrinterTool(
+            printer=printer,
+            name="Main print tool",
+            tool_order=1,
+            max_hotend_c=printer.nozzle_max_c or 300,
+            supported_feed_routes="standard filament path",
+        )
+        return tool
+    try:
+        wanted = int(tool_id or 0)
+    except (TypeError, ValueError):
+        wanted = 0
+    if wanted:
+        selected = next((tool for tool in tools if tool.id == wanted), None)
+        if selected is None:
+            raise HTTPException(status_code=400, detail="Selected print tool does not belong to this printer.")
+        return selected
+    return tools[0]
+
+
+def resolve_catalog_item(session: Session, catalog_item_id: str | int | None) -> NozzleCatalogItem | None:
+    try:
+        wanted = int(catalog_item_id or 0)
+    except (TypeError, ValueError):
+        wanted = 0
+    if not wanted:
+        return None
+    item = session.get(NozzleCatalogItem, wanted)
+    if not item or not item.is_active:
+        raise HTTPException(status_code=400, detail="Selected nozzle catalog item is not available.")
+    return item
+
+
+def upsert_custom_catalog_item(
+    session: Session,
+    create_custom_catalog: bool,
+    label: str,
+    manufacturer: str,
+    part_number: str,
+    diameter_mm: float,
+    nozzle_material: str,
+    nozzle_system: str,
+    max_temp_c: float | None,
+    abrasive_ready: bool | None,
+    carbon_fibre_suitable: bool | None,
+    glass_fibre_suitable: bool | None,
+    high_flow: bool | None,
+    notes: str,
+) -> NozzleCatalogItem | None:
+    if not create_custom_catalog:
+        return None
+    item = NozzleCatalogItem(
+        display_name=clean_text(label) or "Custom nozzle",
+        manufacturer=clean_text(manufacturer),
+        model=clean_text(part_number),
+        diameter_mm=max(0, diameter_mm) if diameter_mm else None,
+        nozzle_material=clean_text(nozzle_material),
+        nozzle_system=clean_text(nozzle_system),
+        max_temp_c=max_temp_c,
+        abrasive_ready=abrasive_ready,
+        carbon_fibre_suitable=carbon_fibre_suitable,
+        glass_fibre_suitable=glass_fibre_suitable,
+        high_flow=high_flow,
+        recommended_usage=clean_text(notes),
+        source_reference="User-created custom nozzle definition.",
+        is_user_created=True,
+    )
+    session.add(item)
+    session.flush()
+    return item
+
+
+def apply_nozzle_form(
+    session: Session,
+    printer: PrinterPreset,
+    nozzle: PrinterNozzle,
+    *,
+    tool_id: str,
+    catalog_item_id: str,
+    create_custom_catalog: bool,
+    label: str,
+    diameter_mm: float,
+    nozzle_material: str,
+    brand_product: str,
+    manufacturer: str,
+    part_number: str,
+    nozzle_system: str,
+    max_temp_c: str,
+    abrasive_ready: str,
+    carbon_fibre_suitable: str,
+    glass_fibre_suitable: str,
+    high_flow: str,
+    inventory_status: str,
+    is_active: bool,
+    installed_on: str,
+    hours_before_tracking: float,
+    notes: str,
+) -> None:
+    if nozzle_material not in NOZZLE_MATERIAL_OPTIONS:
+        nozzle_material = "other"
+    if inventory_status not in NOZZLE_INVENTORY_STATUS_OPTIONS:
+        inventory_status = "spare"
+
+    parsed_max_temp = parse_optional_float(max_temp_c)
+    abrasive_value = tri_state_bool(abrasive_ready)
+    carbon_value = tri_state_bool(carbon_fibre_suitable)
+    glass_value = tri_state_bool(glass_fibre_suitable)
+    high_flow_value = tri_state_bool(high_flow)
+    selected_tool = resolve_printer_tool(printer, tool_id)
+    selected_catalog = upsert_custom_catalog_item(
+        session,
+        create_custom_catalog,
+        label,
+        manufacturer,
+        part_number,
+        diameter_mm,
+        nozzle_material,
+        nozzle_system,
+        parsed_max_temp,
+        abrasive_value,
+        carbon_value,
+        glass_value,
+        high_flow_value,
+        notes,
+    ) or resolve_catalog_item(session, catalog_item_id)
+
+    nozzle.printer = printer
+    nozzle.tool = selected_tool
+    nozzle.catalog_item = selected_catalog
+    nozzle.label = clean_text(label) or clean_text(selected_catalog.display_name if selected_catalog else "") or "Nozzle"
+    nozzle.diameter_mm = max(0, diameter_mm)
+    nozzle.nozzle_material = nozzle_material
+    nozzle.brand_product = clean_text(brand_product)
+    nozzle.manufacturer = clean_text(manufacturer)
+    nozzle.part_number = clean_text(part_number)
+    nozzle.nozzle_system = clean_text(nozzle_system)
+    nozzle.max_temp_c = parsed_max_temp
+    nozzle.abrasive_ready = abrasive_value
+    nozzle.carbon_fibre_suitable = carbon_value
+    nozzle.glass_fibre_suitable = glass_value
+    nozzle.high_flow = high_flow_value
+    nozzle.inventory_status = inventory_status
+    nozzle.is_active = is_active and inventory_status != "archived"
+    nozzle.installed = nozzle.is_active and inventory_status == "installed"
+    nozzle.installed_on = parse_optional_form_date(installed_on, "Install date")
+    nozzle.hours_before_tracking = max(0, hours_before_tracking)
+    nozzle.notes = clean_text(notes)
+    apply_catalog_defaults(nozzle, selected_catalog)
+    update_nozzle_install_state(printer, nozzle)
 
 
 @app.get("/printers")
@@ -1472,6 +2136,13 @@ def create_printer(
     hours_before_tracking: float = Form(0),
     notes: str = Form(""),
     is_active: bool = Form(True),
+    tool_ids: list[str] = Form(default=[]),
+    tool_names: list[str] = Form(default=[]),
+    tool_max_hotend_c: list[str] = Form(default=[]),
+    tool_nozzle_systems: list[str] = Form(default=[]),
+    tool_feed_routes: list[str] = Form(default=[]),
+    tool_notes: list[str] = Form(default=[]),
+    tool_is_active: list[str] = Form(default=[]),
     session: Session = Depends(get_session),
 ):
     printer = PrinterPreset(
@@ -1495,6 +2166,17 @@ def create_printer(
         is_active=is_active,
     )
     session.add(printer)
+    session.flush()
+    sync_printer_tools(
+        printer,
+        tool_ids,
+        tool_names,
+        tool_max_hotend_c,
+        tool_nozzle_systems,
+        tool_feed_routes,
+        tool_notes,
+        tool_is_active,
+    )
     session.commit()
     return RedirectResponse(f"/printers/{printer.id}", status_code=303)
 
@@ -1546,6 +2228,13 @@ def update_printer(
     hours_before_tracking: float = Form(0),
     notes: str = Form(""),
     is_active: bool = Form(False),
+    tool_ids: list[str] = Form(default=[]),
+    tool_names: list[str] = Form(default=[]),
+    tool_max_hotend_c: list[str] = Form(default=[]),
+    tool_nozzle_systems: list[str] = Form(default=[]),
+    tool_feed_routes: list[str] = Form(default=[]),
+    tool_notes: list[str] = Form(default=[]),
+    tool_is_active: list[str] = Form(default=[]),
     session: Session = Depends(get_session),
 ):
     printer = printer_or_404(session, printer_id)
@@ -1567,6 +2256,16 @@ def update_printer(
     printer.hours_before_tracking = max(0, hours_before_tracking)
     printer.notes = clean_text(notes)
     printer.is_active = is_active
+    sync_printer_tools(
+        printer,
+        tool_ids,
+        tool_names,
+        tool_max_hotend_c,
+        tool_nozzle_systems,
+        tool_feed_routes,
+        tool_notes,
+        tool_is_active,
+    )
     session.commit()
     return RedirectResponse(f"/printers/{printer.id}", status_code=303)
 
@@ -1609,18 +2308,32 @@ def new_nozzle_form(printer_id: int, request: Request, session: Session = Depend
         mode="create",
         printer=printer_payload(printer),
         nozzle=blank_nozzle_payload(printer.id),
+        tools=[tool_payload(tool) for tool in active_printer_tools(printer)],
+        nozzle_catalog=[nozzle_catalog_payload(item) for item in nozzle_catalog_items(session)],
         nozzle_material_options=NOZZLE_MATERIAL_OPTIONS,
+        nozzle_status_options=NOZZLE_INVENTORY_STATUS_OPTIONS,
     )
 
 
 @app.post("/printers/{printer_id}/nozzles/new")
 def create_nozzle(
     printer_id: int,
+    tool_id: str = Form(""),
+    catalog_item_id: str = Form(""),
+    create_custom_catalog: bool = Form(False),
     label: str = Form(...),
     diameter_mm: float = Form(0.4),
     nozzle_material: str = Form("brass"),
     brand_product: str = Form(""),
-    installed: bool = Form(False),
+    manufacturer: str = Form(""),
+    part_number: str = Form(""),
+    nozzle_system: str = Form(""),
+    max_temp_c: str = Form(""),
+    abrasive_ready: str = Form("unknown"),
+    carbon_fibre_suitable: str = Form("unknown"),
+    glass_fibre_suitable: str = Form("unknown"),
+    high_flow: str = Form("unknown"),
+    inventory_status: str = Form("spare"),
     is_active: bool = Form(True),
     installed_on: str = Form(""),
     hours_before_tracking: float = Form(0),
@@ -1628,23 +2341,34 @@ def create_nozzle(
     session: Session = Depends(get_session),
 ):
     printer = printer_or_404(session, printer_id)
-    if nozzle_material not in NOZZLE_MATERIAL_OPTIONS:
-        nozzle_material = "other"
-    nozzle = PrinterNozzle(
-        printer=printer,
-        label=clean_text(label),
-        diameter_mm=max(0, diameter_mm),
-        nozzle_material=nozzle_material,
-        brand_product=clean_text(brand_product),
-        installed=installed and is_active,
-        is_active=is_active,
-        installed_on=parse_optional_form_date(installed_on, "Install date"),
-        hours_before_tracking=max(0, hours_before_tracking),
-        notes=clean_text(notes),
-    )
+    nozzle = PrinterNozzle(printer=printer, label=clean_text(label), diameter_mm=max(0, diameter_mm))
     session.add(nozzle)
     session.flush()
-    update_nozzle_install_state(printer, nozzle)
+    apply_nozzle_form(
+        session,
+        printer,
+        nozzle,
+        tool_id=tool_id,
+        catalog_item_id=catalog_item_id,
+        create_custom_catalog=create_custom_catalog,
+        label=label,
+        diameter_mm=diameter_mm,
+        nozzle_material=nozzle_material,
+        brand_product=brand_product,
+        manufacturer=manufacturer,
+        part_number=part_number,
+        nozzle_system=nozzle_system,
+        max_temp_c=max_temp_c,
+        abrasive_ready=abrasive_ready,
+        carbon_fibre_suitable=carbon_fibre_suitable,
+        glass_fibre_suitable=glass_fibre_suitable,
+        high_flow=high_flow,
+        inventory_status=inventory_status,
+        is_active=is_active,
+        installed_on=installed_on,
+        hours_before_tracking=hours_before_tracking,
+        notes=notes,
+    )
     session.commit()
     return RedirectResponse(f"/printers/{printer.id}#nozzles", status_code=303)
 
@@ -1660,7 +2384,10 @@ def edit_nozzle_form(printer_id: int, nozzle_id: int, request: Request, session:
         mode="edit",
         printer=printer_payload(printer),
         nozzle=nozzle_payload(nozzle),
+        tools=[tool_payload(tool) for tool in active_printer_tools(printer)],
+        nozzle_catalog=[nozzle_catalog_payload(item) for item in nozzle_catalog_items(session)],
         nozzle_material_options=NOZZLE_MATERIAL_OPTIONS,
+        nozzle_status_options=NOZZLE_INVENTORY_STATUS_OPTIONS,
     )
 
 
@@ -1668,11 +2395,22 @@ def edit_nozzle_form(printer_id: int, nozzle_id: int, request: Request, session:
 def update_nozzle(
     printer_id: int,
     nozzle_id: int,
+    tool_id: str = Form(""),
+    catalog_item_id: str = Form(""),
+    create_custom_catalog: bool = Form(False),
     label: str = Form(...),
     diameter_mm: float = Form(0.4),
     nozzle_material: str = Form("brass"),
     brand_product: str = Form(""),
-    installed: bool = Form(False),
+    manufacturer: str = Form(""),
+    part_number: str = Form(""),
+    nozzle_system: str = Form(""),
+    max_temp_c: str = Form(""),
+    abrasive_ready: str = Form("unknown"),
+    carbon_fibre_suitable: str = Form("unknown"),
+    glass_fibre_suitable: str = Form("unknown"),
+    high_flow: str = Form("unknown"),
+    inventory_status: str = Form("spare"),
     is_active: bool = Form(False),
     installed_on: str = Form(""),
     hours_before_tracking: float = Form(0),
@@ -1681,18 +2419,31 @@ def update_nozzle(
 ):
     printer = printer_or_404(session, printer_id)
     nozzle = nozzle_or_404(session, printer_id, nozzle_id)
-    if nozzle_material not in NOZZLE_MATERIAL_OPTIONS:
-        nozzle_material = "other"
-    nozzle.label = clean_text(label)
-    nozzle.diameter_mm = max(0, diameter_mm)
-    nozzle.nozzle_material = nozzle_material
-    nozzle.brand_product = clean_text(brand_product)
-    nozzle.is_active = is_active
-    nozzle.installed = installed and is_active
-    nozzle.installed_on = parse_optional_form_date(installed_on, "Install date")
-    nozzle.hours_before_tracking = max(0, hours_before_tracking)
-    nozzle.notes = clean_text(notes)
-    update_nozzle_install_state(printer, nozzle)
+    apply_nozzle_form(
+        session,
+        printer,
+        nozzle,
+        tool_id=tool_id,
+        catalog_item_id=catalog_item_id,
+        create_custom_catalog=create_custom_catalog,
+        label=label,
+        diameter_mm=diameter_mm,
+        nozzle_material=nozzle_material,
+        brand_product=brand_product,
+        manufacturer=manufacturer,
+        part_number=part_number,
+        nozzle_system=nozzle_system,
+        max_temp_c=max_temp_c,
+        abrasive_ready=abrasive_ready,
+        carbon_fibre_suitable=carbon_fibre_suitable,
+        glass_fibre_suitable=glass_fibre_suitable,
+        high_flow=high_flow,
+        inventory_status=inventory_status,
+        is_active=is_active,
+        installed_on=installed_on,
+        hours_before_tracking=hours_before_tracking,
+        notes=notes,
+    )
     session.commit()
     return RedirectResponse(f"/printers/{printer.id}#nozzles", status_code=303)
 
@@ -1702,6 +2453,7 @@ def retire_nozzle(printer_id: int, nozzle_id: int, session: Session = Depends(ge
     nozzle = nozzle_or_404(session, printer_id, nozzle_id)
     nozzle.is_active = False
     nozzle.installed = False
+    nozzle.inventory_status = "removed"
     session.commit()
     return RedirectResponse(f"/printers/{printer_id}#nozzles", status_code=303)
 
@@ -1712,6 +2464,7 @@ def delete_nozzle(printer_id: int, nozzle_id: int, session: Session = Depends(ge
     if nozzle.print_profiles:
         nozzle.is_active = False
         nozzle.installed = False
+        nozzle.inventory_status = "archived"
     else:
         session.delete(nozzle)
     session.commit()
@@ -2437,6 +3190,8 @@ def printer_select_options(session: Session, current_printer_id: int | None = No
             select(PrinterPreset)
             .options(
                 selectinload(PrinterPreset.nozzles).selectinload(PrinterNozzle.print_profiles),
+                selectinload(PrinterPreset.nozzles).selectinload(PrinterNozzle.catalog_item),
+                selectinload(PrinterPreset.tools),
                 selectinload(PrinterPreset.print_profiles),
                 selectinload(PrinterPreset.maintenance_entries),
             )
@@ -2451,7 +3206,12 @@ def nozzle_select_options(session: Session, current_nozzle_id: int | None = None
     nozzles = list(
         session.scalars(
             select(PrinterNozzle)
-            .options(selectinload(PrinterNozzle.printer), selectinload(PrinterNozzle.print_profiles))
+            .options(
+                selectinload(PrinterNozzle.printer),
+                selectinload(PrinterNozzle.tool),
+                selectinload(PrinterNozzle.catalog_item),
+                selectinload(PrinterNozzle.print_profiles),
+            )
             .where(PrinterNozzle.is_active.is_(True))
             .order_by(PrinterNozzle.printer_id, PrinterNozzle.installed.desc(), PrinterNozzle.label)
         )
@@ -2459,7 +3219,12 @@ def nozzle_select_options(session: Session, current_nozzle_id: int | None = None
     if current_nozzle_id and all(nozzle.id != current_nozzle_id for nozzle in nozzles):
         current = session.scalar(
             select(PrinterNozzle)
-            .options(selectinload(PrinterNozzle.printer), selectinload(PrinterNozzle.print_profiles))
+            .options(
+                selectinload(PrinterNozzle.printer),
+                selectinload(PrinterNozzle.tool),
+                selectinload(PrinterNozzle.catalog_item),
+                selectinload(PrinterNozzle.print_profiles),
+            )
             .where(PrinterNozzle.id == current_nozzle_id)
         )
         if current:
@@ -2468,10 +3233,17 @@ def nozzle_select_options(session: Session, current_nozzle_id: int | None = None
 
 
 def nozzle_option_payload(nozzle: PrinterNozzle) -> dict[str, Any]:
+    tool_name = nozzle.tool.name if nozzle.tool else ""
+    label_parts = [
+        nozzle.printer.name if nozzle.printer else "Printer",
+        tool_name,
+        nozzle.label,
+    ]
     return {
         **nozzle_payload(nozzle),
         "printer_name": nozzle.printer.name if nozzle.printer else "",
-        "label_with_printer": f"{nozzle.printer.name if nozzle.printer else 'Printer'} - {nozzle.label}",
+        "tool_name": tool_name,
+        "label_with_printer": " - ".join(part for part in label_parts if part),
     }
 
 
@@ -2941,8 +3713,7 @@ def add_printer(
         slug = f"{base_slug}-{counter}"
         counter += 1
 
-    session.add(
-        PrinterPreset(
+    printer = PrinterPreset(
             slug=slug,
             name=clean_text(name),
             nozzle_max_c=nozzle_max_c,
@@ -2952,6 +3723,15 @@ def add_printer(
             supports_flexible=supports_flexible,
             ams_capable=ams_capable,
             notes=clean_text(notes),
+    )
+    session.add(printer)
+    session.flush()
+    printer.tools.append(
+        PrinterTool(
+            name="Main print tool",
+            tool_order=1,
+            max_hotend_c=nozzle_max_c,
+            supported_feed_routes="standard filament path",
         )
     )
     session.commit()

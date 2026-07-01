@@ -6,11 +6,59 @@ from datetime import date
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .models import FilamentProduct, Material, PriceEntry, PrinterPreset
+from .models import FilamentProduct, Material, NozzleCatalogItem, PriceEntry, PrinterPreset, PrinterTool
 
 
 SOURCE_PRINTER = "Prototype printer compatibility guidance."
 SOURCE_DRY = "Drying values are starting guidance; use the exact spool technical data sheet for a critical part."
+
+
+GENERIC_NOZZLE_CATALOG = [
+    {
+        "display_name": "Generic brass nozzle",
+        "manufacturer": "Generic",
+        "nozzle_material": "brass",
+        "nozzle_system": "unknown / user-defined",
+        "abrasive_ready": False,
+        "carbon_fibre_suitable": False,
+        "glass_fibre_suitable": False,
+        "recommended_usage": "General non-abrasive filaments. Confirm assembly temperature from the exact part.",
+        "source_reference": "Built-in generic category; not a manufacturer specification.",
+    },
+    {
+        "display_name": "Generic hardened steel nozzle",
+        "manufacturer": "Generic",
+        "nozzle_material": "hardened steel",
+        "nozzle_system": "unknown / user-defined",
+        "abrasive_ready": True,
+        "carbon_fibre_suitable": True,
+        "glass_fibre_suitable": True,
+        "recommended_usage": "Abrasive-filled filaments when the exact nozzle and hotend are confirmed.",
+        "source_reference": "Built-in generic category; not a manufacturer specification.",
+    },
+    {
+        "display_name": "Generic stainless steel nozzle",
+        "manufacturer": "Generic",
+        "nozzle_material": "stainless steel",
+        "nozzle_system": "unknown / user-defined",
+        "abrasive_ready": False,
+        "carbon_fibre_suitable": False,
+        "glass_fibre_suitable": False,
+        "recommended_usage": "Specialty non-abrasive use. Confirm temperature and wear limits from the exact part.",
+        "source_reference": "Built-in generic category; not a manufacturer specification.",
+    },
+    {
+        "display_name": "Generic ruby / abrasive-resistant nozzle",
+        "manufacturer": "Generic",
+        "nozzle_material": "ruby / abrasive-resistant",
+        "nozzle_system": "unknown / user-defined",
+        "abrasive_ready": True,
+        "carbon_fibre_suitable": True,
+        "glass_fibre_suitable": True,
+        "recommended_usage": "Abrasive-filled filaments when the exact assembly is confirmed.",
+        "source_reference": "Built-in generic category; not a manufacturer specification.",
+    },
+]
 
 
 def settings(nozzle, bed, chamber, drying, speed, nozzle_size="0.4 mm TC", main=True, aux=True, cooling="Material profile default"):
@@ -69,6 +117,38 @@ def seed_printer_presets(session: Session) -> None:
             continue
         session.add(PrinterPreset(**data))
 
+    session.commit()
+
+
+def seed_nozzle_catalog(session: Session) -> None:
+    if session.scalar(select(NozzleCatalogItem.id).limit(1)):
+        return
+    for data in GENERIC_NOZZLE_CATALOG:
+        session.add(NozzleCatalogItem(**data))
+    session.commit()
+
+
+def ensure_printer_tools(session: Session) -> None:
+    printers = list(session.scalars(select(PrinterPreset)).all())
+    for printer in printers:
+        if not printer.tools:
+            tool = PrinterTool(
+                printer=printer,
+                name="Main print tool",
+                tool_order=1,
+                max_hotend_c=printer.nozzle_max_c or 300,
+                supported_feed_routes="standard filament path",
+            )
+            session.add(tool)
+            session.flush()
+        else:
+            tool = sorted(printer.tools, key=lambda item: (item.tool_order, item.id))[0]
+
+        for nozzle in printer.nozzles:
+            if nozzle.tool_id is None:
+                nozzle.tool = tool
+            if not nozzle.inventory_status:
+                nozzle.inventory_status = "installed" if nozzle.installed else ("spare" if nozzle.is_active else "archived")
     session.commit()
 
 

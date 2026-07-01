@@ -23,6 +23,7 @@
         <button data-need="impact"><b>Impact / fatigue</b><small>Clips, mechanisms, abuse</small></button>
         <button data-need="flexible"><b>Flexible / damping</b><small>Grips, seals, bumpers</small></button>
         <button data-need="cheap"><b>Lower cost</b><small>Iteration or large parts</small></button>
+        <button data-need="easy"><b>Easy to print</b><small>Lower warp, drying, and hardware demands</small></button>
       </div>
     </div>
     <div class="guide-select-grid">
@@ -32,9 +33,7 @@
       <label class="state-select guide-state">Printer / path
         <select id="guide-printer-filter">
           <option value="all">Any saved printer</option>
-          <option value="main-path">X2D Prime nozzle / direct path</option>
-          <option value="aux-path">X2D Aux nozzle / auxiliary path</option>
-          <option value="ams-compatible">AMS compatible</option>
+          <option value="ams-compatible">Works with AMS / automatic feeder</option>
           {% for printer in printers %}
             <option value="printer-{{ printer.slug }}">{{ printer.name }}</option>
           {% endfor %}
@@ -60,6 +59,7 @@
       <li><b>Environment</b> uses UV, water, chemical, and heat values.</li>
       <li><b>Mechanical</b> uses rigidity, strength, impact, and layer adhesion scores.</li>
       <li><b>Manufacturing</b> uses printability, drying needs, and printer/path filters.</li>
+      <li><b>Easy to print</b> favors forgiving process windows, lower drying sensitivity, lower warping risk, and fewer hardware confirmations.</li>
       <li><b>Cost</b> uses tracked price where available and printability.</li>
     </ul>
     <div class="engineering-callout warning-callout">Use the shortlist to choose candidates. Confirm exact product TDS, dryness, and load direction before relying on a part.</div>

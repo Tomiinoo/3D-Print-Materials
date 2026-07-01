@@ -44,9 +44,9 @@
     <label>Drying<input name="drying" value="{{ settings.drying or '' }}" placeholder="80 °C, 8 h"></label>
     <label>Cooling<input name="cooling" value="{{ settings.cooling or '' }}" placeholder="Low fan / off / moderate"></label>
     <label>Recommended nozzle<input name="recommended_nozzle" value="{{ settings.recommended_nozzle or '' }}" placeholder="0.4 mm hardened / 0.6 TC"></label>
-    <label class="check-label"><input type="checkbox" name="main_compatible" {% if settings.get('main_compatible', true) %}checked{% endif %}> Direct path compatible</label>
-    <label class="check-label"><input type="checkbox" name="aux_compatible" {% if settings.get('aux_compatible', false) %}checked{% endif %}> Auxiliary path compatible</label>
-    <label class="check-label"><input type="checkbox" name="ams_compatible" {% if settings.get('ams_compatible', false) %}checked{% endif %}> AMS / multi-spool compatible</label>
+    <label class="check-label"><input type="checkbox" name="main_compatible" {% if settings.get('main_compatible', true) %}checked{% endif %}> Works through normal printer feed</label>
+    <label class="check-label"><input type="checkbox" name="aux_compatible" {% if settings.get('aux_compatible', false) %}checked{% endif %}> Works through secondary/support feed</label>
+    <label class="check-label"><input type="checkbox" name="ams_compatible" {% if settings.get('ams_compatible', false) %}checked{% endif %}> Works with AMS / automatic feeder</label>
   </div>
 
   <div class="panel-title spaced">

@@ -47,7 +47,41 @@
   </section>
 
   <section class="form-section">
-    <h3>D. Notes / status</h3>
+    <div class="section-heading section-heading--compact">
+      <div>
+        <h3>D. Print tools / toolheads</h3>
+        <p class="form-note">AMS or multi-spool slots are feed capability, not physical nozzles. Add one card for each independently usable print tool.</p>
+      </div>
+      <button class="button small secondary" type="button" data-add-tool>Add tool</button>
+    </div>
+    <div class="tool-card-list" data-tool-list>
+      {% for tool in printer.tools %}
+        <article class="tool-card" data-tool-card>
+          <div class="tool-card__head">
+            <strong>Tool {{ loop.index }}</strong>
+            <button class="text-link" type="button" data-remove-tool {% if loop.first and printer.tools|length == 1 %}disabled{% endif %}>Remove</button>
+          </div>
+          <input type="hidden" name="tool_ids" value="{{ tool.id or '' }}">
+          <div class="form-grid">
+            <label>Tool label<input name="tool_names" value="{{ tool.name }}" placeholder="Main print tool / Prime nozzle / Tool 2"></label>
+            <label>Maximum hotend temperature (&deg;C)<input type="number" min="0" step="1" name="tool_max_hotend_c" value="{{ tool.max_hotend_c or printer.nozzle_max_c }}"></label>
+            <label>Nozzle system / interface<input name="tool_nozzle_systems" value="{{ tool.nozzle_system }}" placeholder="Bambu A-series, V6, Revo, custom..."></label>
+            <label>Tool status
+              <select name="tool_is_active">
+                <option value="active" {% if tool.is_active %}selected{% endif %}>Active</option>
+                <option value="inactive" {% if not tool.is_active %}selected{% endif %}>Inactive</option>
+              </select>
+            </label>
+            <label class="span-all">Supported feed routes<input name="tool_feed_routes" value="{{ tool.supported_feed_routes }}" placeholder="direct drive, automatic feeder, dry box feed..."></label>
+            <label class="span-all">Tool notes<textarea name="tool_notes" placeholder="Tool-specific limits, spare hotend, feed quirks">{{ tool.notes }}</textarea></label>
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="form-section">
+    <h3>E. Notes / status</h3>
     <div class="form-grid">
       <label class="span-all">Notes<textarea name="notes" placeholder="Known limits, enclosure notes, feed path quirks">{{ printer.notes }}</textarea></label>
       <label class="check-label"><input type="checkbox" name="is_active" {% if printer.is_active %}checked{% endif %}> Active printer</label>

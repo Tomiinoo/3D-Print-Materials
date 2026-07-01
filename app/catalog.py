@@ -318,46 +318,170 @@ def compatibility(record: dict[str, str], printers: Iterable[Any] | None = None)
     nozzle_max = maximum(record.get("Nozzle temp"))
     bed_max = maximum(record.get("Bed temp"))
     chamber_text = record.get("Chamber/enclosure", "")
+    chamber_max = maximum(chamber_text)
     requires_enclosure = text_has(chamber_text, "enclosure", "chamber", "heated") and not text_has(
         chamber_text, "not needed", "ambient normally", "ambient; enclosure not needed"
     )
 
     filter_keys = []
-    if direct:
-        filter_keys.append("main-path")
-    if aux:
-        filter_keys.append("aux-path")
     if ams:
         filter_keys.append("ams-compatible")
     if hardened:
         filter_keys.append("hardened-nozzle")
 
-    printer_matches: list[str] = []
-    printer_match_labels: list[str] = []
+    status_labels = {
+        "recommended": "Recommended",
+        "precautions": "Compatible with precautions",
+        "needs_confirmation": "Needs hardware confirmation",
+        "not_recommended": "Not recommended",
+    }
+    status_rank = {"recommended": 5, "precautions": 4, "needs_confirmation": 3, "not_recommended": 2}
+    printer_results: list[dict[str, Any]] = []
+    compatible_filter_keys: list[str] = []
+
+    def active_tools(printer: Any) -> list[Any]:
+        tools = [tool for tool in getattr(printer, "tools", []) if getattr(tool, "is_active", True)]
+        return sorted(tools, key=lambda item: (getattr(item, "tool_order", 1), getattr(item, "id", 0)))
+
+    def installed_nozzle(printer: Any, tool: Any | None) -> Any | None:
+        nozzles = [nozzle for nozzle in getattr(printer, "nozzles", []) if getattr(nozzle, "installed", False) and getattr(nozzle, "is_active", True)]
+        if tool is not None:
+            nozzles = [nozzle for nozzle in nozzles if getattr(nozzle, "tool_id", None) == getattr(tool, "id", None)]
+        return nozzles[0] if nozzles else None
+
+    def nozzle_bool(nozzle: Any, key: str) -> bool | None:
+        value = getattr(nozzle, key, None)
+        if value is not None:
+            return value
+        catalog = getattr(nozzle, "catalog_item", None)
+        if catalog is not None:
+            value = getattr(catalog, key, None)
+            if value is not None:
+                return value
+        text = f"{getattr(nozzle, 'label', '')} {getattr(nozzle, 'nozzle_material', '')} {getattr(nozzle, 'brand_product', '')}".lower()
+        if text_has(text, "hardened", "ruby", "tungsten", "carbide", "abrasive"):
+            return True
+        if text_has(text, "brass", "stainless"):
+            return False
+        return None
+
+    def nozzle_limit(nozzle: Any) -> float | None:
+        value = getattr(nozzle, "max_temp_c", None)
+        if value is not None:
+            return value
+        catalog = getattr(nozzle, "catalog_item", None)
+        return getattr(catalog, "max_temp_c", None) if catalog is not None else None
+
     for printer in printers or []:
-        printer_nozzle = getattr(printer, "nozzle_max_c", 0) or 0
-        printer_bed = getattr(printer, "bed_max_c", 0) or 0
-        if nozzle_max is not None and printer_nozzle and nozzle_max > printer_nozzle:
-            continue
-        if bed_max is not None and printer_bed and bed_max > printer_bed:
-            continue
-        if requires_enclosure and not getattr(printer, "enclosed", False):
-            continue
         key = f"printer-{getattr(printer, 'slug', '')}"
-        if key != "printer-":
-            printer_matches.append(key)
+        tool_results: list[dict[str, Any]] = []
+        tools = active_tools(printer) or [None]
+        for tool in tools:
+            nozzle = installed_nozzle(printer, tool)
+            tool_limit = (getattr(tool, "max_hotend_c", None) if tool is not None else None) or getattr(printer, "nozzle_max_c", 0) or 0
+            n_limit = nozzle_limit(nozzle) if nozzle is not None else None
+            effective = min(tool_limit, n_limit) if tool_limit and n_limit is not None else tool_limit
+            blockers: list[str] = []
+            confirmations: list[str] = []
+            cautions: list[str] = []
+            strengths: list[str] = []
+
+            if nozzle is None:
+                confirmations.append("No installed nozzle is assigned to this tool.")
+            elif n_limit is None:
+                confirmations.append("Installed nozzle maximum safe temperature is unknown.")
+            if nozzle_max is not None:
+                if nozzle is not None and n_limit is not None and effective < nozzle_max:
+                    blockers.append(f"Effective nozzle temperature limit is {effective:g} C, below the material guide of {nozzle_max:g} C.")
+                elif nozzle is not None and n_limit is not None:
+                    strengths.append("Effective nozzle temperature is sufficient.")
+                else:
+                    confirmations.append("Nozzle temperature compatibility cannot be fully verified.")
+            if bed_max is not None and getattr(printer, "bed_max_c", 0) and bed_max > getattr(printer, "bed_max_c", 0):
+                blockers.append("Bed temperature is below the material guide.")
+            elif bed_max is not None:
+                strengths.append("Bed temperature is sufficient.")
+            if requires_enclosure and not getattr(printer, "enclosed", False):
+                blockers.append("Enclosure is required or strongly recommended, but this printer is open-frame.")
+            if chamber_max is not None and chamber_max > 45 and getattr(printer, "chamber_max_c", 0) and chamber_max > getattr(printer, "chamber_max_c", 0):
+                blockers.append("Chamber capability is below the material guide.")
+            if hardened:
+                abrasive = nozzle_bool(nozzle, "abrasive_ready") if nozzle is not None else None
+                if abrasive is True:
+                    strengths.append("Abrasive-ready nozzle is installed.")
+                elif abrasive is False:
+                    blockers.append("Material needs an abrasive-ready or hardened nozzle.")
+                else:
+                    confirmations.append("Abrasive-nozzle suitability is unknown.")
+            if getattr(printer, "ams_capable", False) and not ams:
+                cautions.append("AMS / automatic feeder is not recommended for this material.")
+
+            if blockers:
+                status = "not_recommended"
+            elif confirmations:
+                status = "needs_confirmation"
+            elif cautions:
+                status = "precautions"
+            else:
+                status = "recommended"
+            tool_results.append(
+                {
+                    "tool_id": getattr(tool, "id", None),
+                    "tool_name": getattr(tool, "name", "Installed nozzle compatibility") if tool is not None else "Installed nozzle compatibility",
+                    "nozzle_id": getattr(nozzle, "id", None) if nozzle is not None else None,
+                    "nozzle_label": getattr(nozzle, "label", "No installed nozzle") if nozzle is not None else "No installed nozzle",
+                    "status": status,
+                    "status_label": status_labels[status],
+                    "effective_max_c": effective,
+                    "effective_max_confirmed": nozzle is not None and n_limit is not None,
+                    "required_nozzle_c": nozzle_max,
+                    "blockers": blockers,
+                    "confirmations": confirmations,
+                    "cautions": cautions,
+                    "strengths": strengths,
+                    "reasons": strengths + confirmations + cautions + blockers,
+                }
+            )
+        best = max(tool_results, key=lambda item: status_rank[item["status"]])
+        status = best["status"]
+        if status == "recommended":
+            summary = f"Compatible with {getattr(printer, 'name', 'printer')}"
+        elif status == "precautions":
+            summary = f"Compatible with {getattr(printer, 'name', 'printer')} with limitations"
+        elif status == "needs_confirmation":
+            summary = f"Needs nozzle confirmation on {getattr(printer, 'name', 'printer')}"
+        else:
+            summary = f"Not recommended for {getattr(printer, 'name', 'printer')}"
+        result = {
+            "printer_id": getattr(printer, "id", None),
+            "printer_slug": getattr(printer, "slug", ""),
+            "printer_name": getattr(printer, "name", "Printer"),
+            "status": status,
+            "status_label": status_labels[status],
+            "summary": summary,
+            "filter_key": key,
+            "is_compatible_filter_match": status in {"recommended", "precautions"},
+            "best_result": best,
+            "tool_results": tool_results,
+        }
+        printer_results.append(result)
+        if key != "printer-" and result["is_compatible_filter_match"]:
+            compatible_filter_keys.append(key)
             filter_keys.append(key)
-        name = getattr(printer, "name", "")
-        if name:
-            printer_match_labels.append(name)
+
+    preferred = max(printer_results, key=lambda item: status_rank[item["status"]]) if printer_results else None
 
     return {
         "direct_path": direct,
         "aux_path": aux,
         "ams": ams,
         "requires_enclosure": requires_enclosure,
-        "printer_matches": printer_matches,
-        "printer_match_labels": printer_match_labels,
+        "printer_matches": compatible_filter_keys,
+        "printer_match_labels": [item["printer_name"] for item in printer_results if item["is_compatible_filter_match"]],
+        "printer_results": printer_results,
+        "preferred_printer_result": preferred,
+        "summary_label": preferred["summary"] if preferred else "No saved printer selected",
+        "compatible_filter_keys": compatible_filter_keys,
         "filter_keys": sorted(set(filter_keys)),
         "nozzle_max_c": nozzle_max,
         "bed_max_c": bed_max,

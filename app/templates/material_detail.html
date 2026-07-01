@@ -32,7 +32,7 @@
   <article><span>HDT guide</span><strong>{{ material.real_properties.hdt_c.label or 'No stored value' }}</strong></article>
   <article><span>Continuous use</span><strong>{{ material.real_properties.continuous_service_c.label or '-' }}</strong></article>
   <article><span>Moisture</span><strong>{{ material.real_properties.moisture_sensitivity.label or material.properties.moisture_sensitivity or '-' }}</strong></article>
-  <article><span>Printer fit</span><strong>{% if material.compatibility.direct_path %}Direct OK{% else %}Review path{% endif %}</strong></article>
+  <article><span>Printer fit</span><strong>{{ material.compatibility.summary_label }}</strong></article>
 </section>
 
 <section class="material-workbench" aria-label="Material sections">
@@ -103,20 +103,39 @@
 
   <article class="panel compatibility-panel anchored" id="compatibility">
     <div class="panel-title"><span class="eyebrow">PRINTER COMPATIBILITY</span><h2>Fit checks</h2></div>
-    <div class="table-scroll">
-      <table>
-        <thead><tr><th>Path / printer</th><th>Compatibility</th><th>Requirement</th><th>Reason</th></tr></thead>
-        <tbody>
-          <tr><td>Direct path</td><td>{% if material.compatibility.direct_path %}Compatible{% else %}Not recommended{% endif %}</td><td>{{ material.settings.recommended_nozzle or 'Review nozzle' }}</td><td>Material path and nozzle guidance.</td></tr>
-          <tr><td>Aux path</td><td>{% if material.compatibility.aux_path %}Compatible{% else %}Not recommended{% endif %}</td><td>Review feed path</td><td>Flexible, brittle, or filled materials may need direct feed.</td></tr>
-          <tr><td>AMS / multi-spool</td><td>{% if material.compatibility.ams %}Compatible{% else %}Not recommended{% endif %}</td><td>Check spool and feed path</td><td>Compatibility is based on saved material guidance.</td></tr>
-          {% if material.compatibility.printer_match_labels %}
-            <tr><td>Saved printers</td><td>Matched</td><td>{{ material.compatibility.printer_match_labels | join(', ') }}</td><td>Preset temperature and feature limits matched.</td></tr>
-          {% else %}
-            <tr><td>Saved printers</td><td>Needs review</td><td>No automatic match</td><td>Review nozzle, bed, enclosure, and filament path.</td></tr>
-          {% endif %}
-        </tbody>
-      </table>
+    <div class="compatibility-stack">
+      {% for result in material.compatibility.printer_results %}
+        <article class="compatibility-card compatibility-card--{{ result.status }}">
+          <div class="compatibility-card__head">
+            <strong>{{ result.printer_name }}</strong>
+            <span class="status-chip {% if result.status in ['not_recommended', 'not_supported'] %}warning{% elif result.status == 'needs_confirmation' %}muted{% endif %}">{{ result.status_label }}</span>
+          </div>
+          <p>{{ result.summary }}</p>
+          {% for tool in result.tool_results %}
+            <div class="tool-compat-row">
+              <div>
+                <strong>{{ tool.tool_name }}</strong>
+                <small>{{ tool.nozzle_label }}{% if tool.effective_max_c %} / effective max {{ tool.effective_max_c|int }} &deg;C{% endif %}</small>
+              </div>
+              <span>{{ tool.status_label }}</span>
+              <ul>
+                {% for reason in tool.reasons[:4] %}
+                  <li>{{ reason }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+          {% endfor %}
+        </article>
+      {% else %}
+        <div class="empty-state">Save a printer and installed nozzle to calculate printer-specific compatibility.</div>
+      {% endfor %}
+      <article class="compatibility-card">
+        <div class="compatibility-card__head">
+          <strong>AMS / automatic feeder</strong>
+          <span class="status-chip {% if not material.compatibility.ams %}warning{% endif %}">{% if material.compatibility.ams %}Compatible{% else %}Not recommended{% endif %}</span>
+        </div>
+        <p>Automatic feeder compatibility is kept separate from physical nozzle/tool count.</p>
+      </article>
     </div>
   </article>
 </section>

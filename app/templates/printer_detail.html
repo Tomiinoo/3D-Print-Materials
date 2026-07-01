@@ -35,7 +35,7 @@
   <article><span>Max nozzle</span><strong>{{ printer.nozzle_max_c|int }} &deg;C</strong></article>
   <article><span>Max bed</span><strong>{{ printer.bed_max_c|int }} &deg;C</strong></article>
   <article><span>Max chamber</span><strong>{% if printer.chamber_max_c %}{{ printer.chamber_max_c|int }} &deg;C{% else %}-{% endif %}</strong></article>
-  <article><span>Installed nozzle</span><strong>{% if printer.installed_nozzle %}{{ printer.installed_nozzle.label }}{% else %}-{% endif %}</strong></article>
+  <article><span>Print tools</span><strong>{{ printer.tool_count }}</strong></article>
   <article><span>Tracked print hours</span><strong>{{ printer.tracked_hours_label }}</strong></article>
   <article><span>Last maintenance</span><strong>{{ printer.last_maintenance_date or '-' }}</strong></article>
 </section>
@@ -62,23 +62,49 @@
   </article>
 </section>
 
+<section class="section-heading anchored" id="tools">
+  <div><span class="eyebrow">PRINT TOOLS</span><h2>Toolheads and installed hardware</h2></div>
+  <a class="button secondary" href="/printers/{{ printer.id }}/edit">Edit tools</a>
+</section>
+<section class="tool-summary-grid">
+  {% for tool in printer.tools %}
+    <article class="panel tool-summary-card">
+      <div class="tool-summary-card__head">
+        <span class="eyebrow">TOOL {{ loop.index }}</span>
+        <strong>{{ tool.name }}</strong>
+      </div>
+      <dl class="spec-list">
+        <div><dt>Max hotend</dt><dd>{{ tool.max_hotend_c|int }} &deg;C</dd></div>
+        <div><dt>Nozzle system</dt><dd>{{ tool.nozzle_system or 'Unknown / not set' }}</dd></div>
+        <div><dt>Feed routes</dt><dd>{{ tool.supported_feed_routes or 'Not specified' }}</dd></div>
+        <div><dt>Installed nozzle</dt><dd>{% if tool.installed_nozzle %}{{ tool.installed_nozzle.label }}{% else %}No installed nozzle assigned{% endif %}</dd></div>
+      </dl>
+      {% if tool.notes %}<p>{{ tool.notes }}</p>{% endif %}
+    </article>
+  {% else %}
+    <div class="empty-state">No active print tool is configured yet.</div>
+  {% endfor %}
+</section>
+
 <section class="section-heading anchored" id="nozzles">
-  <div><span class="eyebrow">NOZZLES</span><h2>Installed and saved nozzles</h2></div>
+  <div><span class="eyebrow">NOZZLES</span><h2>Owned nozzle inventory</h2></div>
   <a class="button secondary" href="/printers/{{ printer.id }}/nozzles/new">Add nozzle</a>
 </section>
 <section class="panel table-panel">
   <div class="table-scroll">
     <table>
-      <thead><tr><th>Label</th><th>Diameter</th><th>Material</th><th>Installed</th><th>Tracked hours</th><th>Status</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Label</th><th>Tool</th><th>Diameter</th><th>Material</th><th>Max temp</th><th>Abrasive</th><th>Status</th><th>Tracked hours</th><th>Actions</th></tr></thead>
       <tbody>
         {% for nozzle in printer.nozzles %}
           <tr>
-            <td><strong>{{ nozzle.label }}</strong>{% if nozzle.brand_product %}<br><small>{{ nozzle.brand_product }}</small>{% endif %}</td>
+            <td><strong>{{ nozzle.label }}</strong>{% if nozzle.manufacturer or nozzle.part_number or nozzle.brand_product %}<br><small>{{ nozzle.manufacturer or nozzle.brand_product }}{% if nozzle.part_number %} / {{ nozzle.part_number }}{% endif %}</small>{% endif %}</td>
+            <td>{{ nozzle.tool_name or 'Unassigned' }}</td>
             <td>{{ nozzle.diameter_mm }} mm</td>
             <td>{{ nozzle.nozzle_material }}</td>
-            <td>{% if nozzle.installed %}Installed{% else %}-{% endif %}</td>
+            <td>{{ nozzle.max_temp_label }}</td>
+            <td>{{ nozzle.abrasive_ready_label }}</td>
+            <td>{{ nozzle.inventory_status|replace('_', ' ')|title }}{% if not nozzle.is_active %}<br><small>not selectable</small>{% endif %}</td>
             <td>{{ nozzle.tracked_hours_label }}</td>
-            <td>{% if nozzle.is_active %}Active{% else %}Retired{% endif %}</td>
             <td>
               <div class="table-actions">
                 <a class="text-link" href="/printers/{{ printer.id }}/nozzles/{{ nozzle.id }}/edit">Edit</a>
@@ -92,7 +118,7 @@
             </td>
           </tr>
         {% else %}
-          <tr><td colspan="7" class="muted-cell">No nozzle records yet.</td></tr>
+          <tr><td colspan="9" class="muted-cell">No nozzle records yet.</td></tr>
         {% endfor %}
       </tbody>
     </table>

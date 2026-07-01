@@ -13,7 +13,41 @@
 <form class="material-form panel" action="{% if mode == 'create' %}/printers/{{ printer.id }}/nozzles/new{% else %}/printers/{{ printer.id }}/nozzles/{{ nozzle.id }}/edit{% endif %}" method="post">
   <div class="panel-title"><span class="eyebrow">NOZZLE RECORD</span><h2>Hardware and tracking</h2></div>
   <section class="form-section">
+    <h3>A. Assignment</h3>
     <div class="form-grid">
+      <label>Assigned print tool
+        <select name="tool_id">
+          {% for tool in tools %}
+            <option value="{{ tool.id }}" {% if nozzle.tool_id == tool.id or (not nozzle.tool_id and loop.first) %}selected{% endif %}>{{ tool.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Status
+        <select name="inventory_status">
+          {% for option in nozzle_status_options %}
+            <option value="{{ option }}" {% if nozzle.inventory_status == option %}selected{% endif %}>{{ option|replace('_', ' ')|title }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Purchase/install date<input type="date" name="installed_on" value="{{ nozzle.installed_on }}"></label>
+      <label>Hours before tracking<input type="number" min="0" step="0.1" name="hours_before_tracking" value="{{ nozzle.hours_before_tracking }}"></label>
+      <label class="check-label"><input type="checkbox" name="is_active" {% if nozzle.is_active %}checked{% endif %}> Active / selectable</label>
+    </div>
+  </section>
+
+  <section class="form-section">
+    <h3>B. Nozzle definition</h3>
+    <div class="form-grid">
+      <label class="span-all">Search built-in or custom catalog<input type="search" data-nozzle-catalog-search placeholder="brass, hardened, 0.6, high-flow, manufacturer..."></label>
+      <label class="span-all">Catalog definition
+        <select name="catalog_item_id" data-nozzle-catalog-select>
+          <option value="">Custom values on this record</option>
+          {% for item in nozzle_catalog %}
+            <option value="{{ item.id }}" data-search="{{ item.display_name }} {{ item.manufacturer }} {{ item.model }} {{ item.nozzle_material }} {{ item.nozzle_system }}" {% if nozzle.catalog_item_id == item.id %}selected{% endif %}>{{ item.display_name }}{% if item.manufacturer %} / {{ item.manufacturer }}{% endif %}{% if item.model %} / {{ item.model }}{% endif %}{% if item.is_user_created %} (custom){% endif %}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="check-label span-all"><input type="checkbox" name="create_custom_catalog"> Create custom nozzle definition from these values</label>
       <label class="span-all">User label<input required name="label" value="{{ nozzle.label }}" placeholder="0.4 mm hardened steel"></label>
       <label>Diameter in mm<input required type="number" min="0.1" step="0.01" name="diameter_mm" value="{{ nozzle.diameter_mm }}"></label>
       <label>Nozzle material
@@ -23,11 +57,45 @@
           {% endfor %}
         </select>
       </label>
-      <label>Brand / product<input name="brand_product" value="{{ nozzle.brand_product }}" placeholder="E3D ObXidian, stock brass..."></label>
-      <label>Purchase/install date<input type="date" name="installed_on" value="{{ nozzle.installed_on }}"></label>
-      <label>Hours before tracking<input type="number" min="0" step="0.1" name="hours_before_tracking" value="{{ nozzle.hours_before_tracking }}"></label>
-      <label class="check-label"><input type="checkbox" name="installed" {% if nozzle.installed %}checked{% endif %}> Currently installed</label>
-      <label class="check-label"><input type="checkbox" name="is_active" {% if nozzle.is_active %}checked{% endif %}> Active / selectable</label>
+      <label>Manufacturer / brand<input name="manufacturer" value="{{ nozzle.manufacturer }}" placeholder="E3D, Bambu Lab, Bondtech, unknown..."></label>
+      <label>Part number / model<input name="part_number" value="{{ nozzle.part_number }}" placeholder="ObXidian, stock 0.4, custom..."></label>
+      <label>Nozzle system / assembly<input name="nozzle_system" value="{{ nozzle.nozzle_system }}" placeholder="V6, Revo, Bambu A-series, proprietary..."></label>
+      <label>Brand / product note<input name="brand_product" value="{{ nozzle.brand_product }}" placeholder="Shop label or bundle name"></label>
+      <label>Maximum safe temperature (&deg;C)<input type="number" min="0" step="1" name="max_temp_c" value="{{ nozzle.max_temp_c if nozzle.max_temp_c is not none else '' }}" placeholder="Unknown"></label>
+    </div>
+  </section>
+
+  <section class="form-section">
+    <h3>C. Material suitability</h3>
+    <div class="form-grid">
+      <label>Abrasive-material suitability
+        <select name="abrasive_ready">
+          <option value="unknown" {% if nozzle.abrasive_ready is none %}selected{% endif %}>Unknown</option>
+          <option value="yes" {% if nozzle.abrasive_ready == true %}selected{% endif %}>Suitable / abrasive-ready</option>
+          <option value="no" {% if nozzle.abrasive_ready == false %}selected{% endif %}>Not suitable</option>
+        </select>
+      </label>
+      <label>Carbon-fibre suitability
+        <select name="carbon_fibre_suitable">
+          <option value="unknown" {% if nozzle.carbon_fibre_suitable is none %}selected{% endif %}>Unknown</option>
+          <option value="yes" {% if nozzle.carbon_fibre_suitable == true %}selected{% endif %}>Suitable</option>
+          <option value="no" {% if nozzle.carbon_fibre_suitable == false %}selected{% endif %}>Not suitable</option>
+        </select>
+      </label>
+      <label>Glass-fibre suitability
+        <select name="glass_fibre_suitable">
+          <option value="unknown" {% if nozzle.glass_fibre_suitable is none %}selected{% endif %}>Unknown</option>
+          <option value="yes" {% if nozzle.glass_fibre_suitable == true %}selected{% endif %}>Suitable</option>
+          <option value="no" {% if nozzle.glass_fibre_suitable == false %}selected{% endif %}>Not suitable</option>
+        </select>
+      </label>
+      <label>High-flow capability
+        <select name="high_flow">
+          <option value="unknown" {% if nozzle.high_flow is none %}selected{% endif %}>Unknown</option>
+          <option value="yes" {% if nozzle.high_flow == true %}selected{% endif %}>High-flow</option>
+          <option value="no" {% if nozzle.high_flow == false %}selected{% endif %}>Standard flow</option>
+        </select>
+      </label>
       <label class="span-all">Notes<textarea name="notes">{{ nozzle.notes }}</textarea></label>
     </div>
   </section>
